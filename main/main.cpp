@@ -14,8 +14,8 @@ static void hello_task(void *pvParameters)
     ESP_LOGI(TAG, "Hello Task starts");
     while(true)
     {
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
-        ESP_LOGI(TAG, "Sleep 3 seconds");
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "Sleep 10 seconds");
     }
 }
 
@@ -211,10 +211,9 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
 
-    wifi_sta_config("AQUOS R3", "1234567890");
-    wifi_sta_init();
+    WifiSTA::GetInstance().Config("AQUOS R3", "123467890");
+    WifiSTA::GetInstance().Init();
 
     xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
