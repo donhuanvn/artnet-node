@@ -3,6 +3,9 @@
 #include "freertos/FreeRTOS.h"
 #include "cJSON.h"
 #include "nvs_flash.h"
+#include "wifi.h"
+#include "esp_wifi.h"
+#include "config.h"
 
 static const char *TAG = "ArtNet";
 
@@ -193,7 +196,6 @@ static void test_nvs_and_json_task(void *pvParameters)
     }
 }
 
-
 extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "ArtNet Node - Full Master Wireless");
@@ -203,13 +205,19 @@ extern "C" void app_main(void)
         // NVS partition was truncated and needs to be erased
         // Retry nvs_flash_init
         ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
+        ESP_ERROR_CHECK(nvs_flash_init());
     }
-    ESP_ERROR_CHECK( err );
-
     
+    ESP_ERROR_CHECK(esp_netif_init());
+
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_sta_config("AQUOS R3", "1234567890");
+    wifi_sta_init();
+
     xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_task, "test_nvs_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(test_nvs_and_json_task, "test_nvs_and_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+    // xTaskCreate(test_nvs_and_json_task, "test_nvs_and_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
 }
