@@ -198,134 +198,24 @@ static void test_nvs_and_json_task(void *pvParameters)
     }
 }
 
-static void udp_server_artnet_task(void *pvParameters)
+static void dmx_message_handler(const char * msg, size_t len, const char * sender)
 {
-    ESP_LOGI(TAG, "UDP Server ArtNet Task starts");
-
-    char addr_str[128];
-    struct sockaddr_in dest_addr = {}; // IPv4
-    dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(PROJECT_UDP_ARTNET_PORT); // To read later: __builtin_bswap16
-
-    while (true)
-    {
-        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-        if (sock < 0)
-        {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket created");
-
-        // Set timeout
-        struct timeval timeout;
-        timeout.tv_sec = 3600;
-        timeout.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-        int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-        if (err < 0)
-        {
-            ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-        }
-        ESP_LOGI(TAG, "Socket bound, port %d", PROJECT_UDP_ARTNET_PORT);
-
-        struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
-        socklen_t socklen = sizeof(source_addr);
-
-        while (true)
-        {
-            char * buffer = ArtNetServer::GetInstance().GetBuffer();
-            size_t bufferlen = ArtNetServer::GetInstance().GetBufferLength() - 1;
-            int len = recvfrom(sock, buffer, bufferlen, 0, (struct sockaddr *)&source_addr, &socklen);
-            // Error occurred during receiving
-            if (len < 0)
-            {
-                ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
-                break;
-            }
-            // Data received
-            else if (source_addr.ss_family == PF_INET)
-            {
-                // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
-                ArtNetServer::GetInstance().HandleIncommingMessage(len, addr_str);
-            }
-        }
-
-        if (sock != -1)
-        {
-            ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
-        }
-    }
+    ESP_LOGI(TAG, "dmx_message_handler");
 }
 
-static void udp_server_common_task(void *pvParameters)
+static void artsync_message_handler(const char * msg, size_t len, const char * sender)
 {
-    ESP_LOGI(TAG, "UDP Server Common Task starts");
+    ESP_LOGI(TAG, "artsync_message_handler");
+}
 
-    char addr_str[128];
-    struct sockaddr_in dest_addr = {}; // IPv4
-    dest_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(PROJECT_UDP_COMMON_PORT); // To read later: __builtin_bswap16
+static void discovery_message_handler(const char * msg, size_t len, const char * sender)
+{
+    ESP_LOGI(TAG, "discovery_message_handler");
+}
 
-    while (true)
-    {
-        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-        if (sock < 0)
-        {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket created");
-
-        // Set timeout
-        struct timeval timeout;
-        timeout.tv_sec = 3600;
-        timeout.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-        int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-        if (err < 0)
-        {
-            ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-        }
-        ESP_LOGI(TAG, "Socket bound, port %d", PROJECT_UDP_COMMON_PORT);
-
-        struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
-        socklen_t socklen = sizeof(source_addr);
-
-        while (true)
-        {
-            char * buffer = CommonServer::GetInstance().GetBuffer();
-            size_t bufferlen = CommonServer::GetInstance().GetBufferLength() - 1;
-            int len = recvfrom(sock, buffer, bufferlen, 0, (struct sockaddr *)&source_addr, &socklen);
-            // Error occurred during receiving
-            if (len < 0)
-            {
-                ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
-                break;
-            }
-            // Data received
-            else if (source_addr.ss_family == PF_INET)
-            {
-                // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
-                CommonServer::GetInstance().HandleIncommingMessage(len, addr_str);
-            }
-        }
-
-        if (sock != -1)
-        {
-            ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
-        }
-    }
+static void common_message_handler(const char * msg, size_t len, const char * sender)
+{
+    ESP_LOGI(TAG, "common_message_handler");
 }
 
 extern "C" void app_main(void)
@@ -346,10 +236,15 @@ extern "C" void app_main(void)
 
     WifiSTA::GetInstance().Init();
 
+    ArtNetServer::GetInstance().RegisterDMXMessageHandler(dmx_message_handler);
+    ArtNetServer::GetInstance().RegisterArtSyncMessageHandler(artsync_message_handler);
+    ArtNetServer::GetInstance().RegisterDiscoveryMessageHandler(discovery_message_handler);
+    CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
+
     xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_task, "test_nvs_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_and_json_task, "test_nvs_and_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(udp_server_artnet_task, "udp_server_artnet_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(udp_server_common_task, "udp_server_common_task", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
+    xTaskCreate(ArtNetServer::FreeRTOSTask, "ArtNetServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
 }
