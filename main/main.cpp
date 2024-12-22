@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "version.h"
 #include <esp_log.h>
 #include "freertos/FreeRTOS.h"
 #include "cJSON.h"
@@ -8,6 +9,8 @@
 #include "config.h"
 #include "lwip/sockets.h"
 #include "udp_server.h"
+#include "miscellaneous.h"
+
 
 static const char *TAG = "Main";
 
@@ -221,6 +224,7 @@ static void common_message_handler(const char * msg, size_t len, const char * se
 extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "ArtNet Node - Full Master Wireless");
+    FWVersion::log();
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -234,17 +238,28 @@ extern "C" void app_main(void)
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    WifiSTA::GetInstance().Init();
+    HWStatus::Mode mode = HWStatus::GetMode();
+    if (mode == HWStatus::Mode::CONFIG_ONLY)
+    {
+        WifiAP::GetInstance().Init();
+        CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
+        xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+    }
+    else if (mode == HWStatus::Mode::CONFIG_AND_RUN_DMX)
+    {
+        WifiSTA::GetInstance().Init();
 
-    ArtNetServer::GetInstance().RegisterDMXMessageHandler(dmx_message_handler);
-    ArtNetServer::GetInstance().RegisterArtSyncMessageHandler(artsync_message_handler);
-    ArtNetServer::GetInstance().RegisterDiscoveryMessageHandler(discovery_message_handler);
-    CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
+        ArtNetServer::GetInstance().RegisterDMXMessageHandler(dmx_message_handler);
+        ArtNetServer::GetInstance().RegisterArtSyncMessageHandler(artsync_message_handler);
+        ArtNetServer::GetInstance().RegisterDiscoveryMessageHandler(discovery_message_handler);
+        CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
 
-    xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+        xTaskCreate(ArtNetServer::FreeRTOSTask, "ArtNetServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+        xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
+    }
+
+    // xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_task, "test_nvs_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_and_json_task, "test_nvs_and_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(ArtNetServer::FreeRTOSTask, "ArtNetServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
 }
