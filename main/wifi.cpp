@@ -47,7 +47,7 @@ static void reconnect(TimerHandle_t xTimer)
 
 static TimerHandle_t wifi_reconnect_timer = xTimerCreate("wifi_reconnect_timer", pdMS_TO_TICKS(PROJECT_WIFI_STA_RETRY_DELAY_MS), pdFALSE, NULL, &reconnect);
 
-static void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
@@ -62,6 +62,11 @@ static void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        char buffer[20];
+        sprintf(buffer, IPSTR, IP2STR(&event->ip_info.ip));
+        WifiSTA::GetInstance().sGotIP = buffer;
+
         wifi_config_t wifi_config;
         ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &wifi_config));
         ESP_LOGI(TAG_STA, "connect to the AP '%s' success", wifi_config.sta.ssid);
