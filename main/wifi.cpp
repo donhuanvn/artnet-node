@@ -12,9 +12,33 @@
 static const char *TAG_STA = "WiFi-STA";
 static const char *TAG_AP = "WiFi-AP";
 
-static esp_event_handler_instance_t instance_wifista_any_id;
-static esp_event_handler_instance_t instance_wifista_got_ip;
-static esp_event_handler_instance_t instance_wifiap_any_id;
+class ChangeWifiMode
+{
+    wifi_mode_t mode;
+public:
+    ChangeWifiMode(wifi_mode_t destMode)
+    {
+        ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
+        ESP_ERROR_CHECK(esp_wifi_set_mode(destMode));
+    }
+    ~ChangeWifiMode()
+    {
+        ESP_ERROR_CHECK(esp_wifi_set_mode(mode));
+    }
+};
+
+static bool is_valid_ssid(const std::string& s_ssid)
+{
+    return s_ssid.length() > 1;
+}
+
+static bool is_valid_password(const std::string& s_password, wifi_auth_mode_t& o_auth_mode)
+{
+    bool valid = false;
+    valid |= (o_auth_mode == WIFI_AUTH_OPEN && s_password.empty());
+    valid |= (o_auth_mode == WIFI_AUTH_WPA_WPA2_PSK && s_password.length() >= 8);
+    return valid;
+}
 
 static void reconnect(TimerHandle_t xTimer)
 {
@@ -113,16 +137,51 @@ void WifiSTA::Config(const std::string &s_ssid, const std::string &s_password)
     {
         wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     }
-    wifi_mode_t current_mode; // backup the current mode to prevent from potentical error later.
-    ESP_ERROR_CHECK(esp_wifi_get_mode(&current_mode));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ChangeWifiMode _(WIFI_MODE_STA);
     esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
     }
     ESP_ERROR_CHECK(err);
-    ESP_ERROR_CHECK(esp_wifi_set_mode(current_mode));
+}
+
+bool WifiSTA::HasValidConfig()
+{
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_config_t wifi_config;
+    ChangeWifiMode _(WIFI_MODE_STA);
+    esp_err_t err = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
+    }
+    ESP_ERROR_CHECK(err);
+
+    bool valid = true;
+    valid &= is_valid_ssid((const char *)(wifi_config.sta.ssid));
+    valid &= is_valid_password((const char *)(wifi_config.sta.password), wifi_config.sta.threshold.authmode);
+
+    return valid;
+}
+
+std::pair<std::string, std::string> WifiSTA::GetConfig()
+{
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_config_t wifi_config;
+    ChangeWifiMode _(WIFI_MODE_STA);
+    esp_err_t err = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
+    }
+    ESP_ERROR_CHECK(err);
+
+    return std::make_pair(std::string((const char *)(wifi_config.sta.ssid)), std::string((const char *)(wifi_config.sta.password)));
 }
 
 void WifiAP::Init()
@@ -137,7 +196,7 @@ void WifiAP::Init()
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_ap_event_handler, NULL, &instance_wifiap_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_ap_event_handler, NULL, &ins_any_id));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -175,23 +234,61 @@ void WifiAP::Config(const std::string &s_ssid, const std::string &s_password)
     strcpy((char *)(wifi_config.ap.password), s_password.c_str());
     wifi_config.ap.channel = PROJECT_WIFI_AP_CHANNEL;
     wifi_config.ap.max_connection = PROJECT_WIFI_AP_MAX_CONN;
-    wifi_config.ap.pmf_cfg.required = true;
+    wifi_config.ap.pmf_cfg.required = false; // Cannot set PMF to required when in WIFI_AUTH_WPA_WPA2_PSK! Setting PMF to optional.
     if (s_password.length() == 0)
     {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
     else
     {
-        wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+        wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     }
-    wifi_mode_t current_mode; // backup current mode to prevent from potential error.
-    ESP_ERROR_CHECK(esp_wifi_get_mode(&current_mode));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ChangeWifiMode _(WIFI_MODE_AP);
     esp_err_t err = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
     }
     ESP_ERROR_CHECK(err);
-    ESP_ERROR_CHECK(esp_wifi_set_mode(current_mode));
+}
+
+bool WifiAP::HasValidConfig()
+{
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_config_t wifi_config;
+    ChangeWifiMode _(WIFI_MODE_AP);
+    esp_err_t err = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_AP, "Error (%s)", esp_err_to_name(err));
+    }
+    ESP_ERROR_CHECK(err);
+
+    bool valid = true;
+    valid &= is_valid_ssid((const char *)(wifi_config.ap.ssid));
+    valid &= is_valid_password((const char *)(wifi_config.ap.password), wifi_config.ap.authmode);
+    valid &= (wifi_config.ap.channel == PROJECT_WIFI_AP_CHANNEL);
+    valid &= (wifi_config.ap.max_connection == PROJECT_WIFI_AP_MAX_CONN);
+    valid &= (wifi_config.ap.pmf_cfg.required == false);
+
+    return valid;
+}
+
+std::pair<std::string, std::string> WifiAP::GetConfig()
+{
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_config_t wifi_config;
+    ChangeWifiMode _(WIFI_MODE_AP);
+    esp_err_t err = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
+    }
+    ESP_ERROR_CHECK(err);
+
+    return std::make_pair(std::string((const char *)(wifi_config.ap.ssid)), std::string((const char *)(wifi_config.ap.password)));
 }

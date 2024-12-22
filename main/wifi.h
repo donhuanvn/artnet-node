@@ -2,6 +2,7 @@
 #define __WIFI_H__
 
 #include <string>
+#include <utility>
 #include "esp_system.h"
 #include "esp_wifi.h"
 
@@ -21,6 +22,8 @@ public:
     bool HasInit();
     void Deinit();
     void Config(const std::string &s_ssid, const std::string &s_password);
+    bool HasValidConfig();
+    std::pair<std::string, std::string> GetConfig();
 };
 
 class WifiAP
@@ -38,6 +41,8 @@ public:
     bool HasInit();
     void Deinit();
     void Config(const std::string &s_ssid, const std::string &s_password);
+    bool HasValidConfig();
+    std::pair<std::string, std::string> GetConfig();
 };
 
 #endif /* __WIFI_H__ */

@@ -212,8 +212,19 @@ extern "C" void app_main(void)
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    WifiSTA::GetInstance().Config("AQUOS R3", "123467890");
-    WifiSTA::GetInstance().Init();
+    WifiAP::GetInstance().Config("ESP32", "");
+    // WifiSTA::GetInstance().Init();
+
+    ESP_LOGI(TAG, "WifiSTA has valid config %s", (WifiSTA::GetInstance().HasValidConfig() ? "true" : "false"));
+    ESP_LOGI(TAG, "WifiAP has valid config %s", (WifiAP::GetInstance().HasValidConfig() ? "true" : "false"));
+    {
+        auto [ssid, pass] = WifiSTA::GetInstance().GetConfig();
+        ESP_LOGI(TAG, "WifiSTA SSID '%s' PASSWORD '%s'", ssid.c_str(), pass.c_str());
+    }
+    {
+        auto [ssid, pass] = WifiAP::GetInstance().GetConfig();
+        ESP_LOGI(TAG, "WifiAP SSID '%s' PASSWORD '%s'", ssid.c_str(), pass.c_str());
+    }
 
     xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
