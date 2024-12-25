@@ -1,0 +1,16 @@
+#ifndef __ARTNET_NODE_VERSION_H_IN__
+#define __ARTNET_NODE_VERSION_H_IN__
+
+struct cJSON;
+
+class FWVersion
+{
+public:
+    static constexpr const char * version = "1.0.0";
+    static constexpr const char * buildTime = "@TIMESTAMP_NOW@";
+    static constexpr const char * commitId = "@COMMIT_ID@";
+    static void log();
+    static cJSON * toJson();
+};
+
+#endif /* __ARTNET_NODE_VERSION_H_IN__ */
