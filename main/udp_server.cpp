@@ -12,17 +12,17 @@ void ArtNetServer::HandleIncommingMessage(size_t msgLength, char * senderIP)
         ESP_LOGD(TAG, "Receive Artnet Message with length less than 10");
         return;
     }
-    int16_t op_code = aRxBuffer.data()[9] << 8 | aRxBuffer.data()[8];
+    int16_t op_code = m_aRxBuffer.data()[9] << 8 | m_aRxBuffer.data()[8];
     switch (op_code)
     {
     case 0x5000:
-        oDMXHandler(aRxBuffer.data(), msgLength, senderIP);
+        m_oDMXHandler(m_aRxBuffer.data(), msgLength, senderIP);
         break;
     case 0x5200:
-        oArtSyncHandler(aRxBuffer.data(), msgLength, senderIP);
+        m_oArtSyncHandler(m_aRxBuffer.data(), msgLength, senderIP);
         break;
     case 0x2009:
-        oDiscoveryHandler(aRxBuffer.data(), msgLength, senderIP);
+        m_oDiscoveryHandler(m_aRxBuffer.data(), msgLength, senderIP);
         break;
     default:
         ESP_LOGD(TAG, "Receive ArtNet Message with unsupported OPCODE '0x%04X'", op_code);
@@ -33,9 +33,9 @@ void ArtNetServer::HandleIncommingMessage(size_t msgLength, char * senderIP)
 void ArtNetServer::CheckHandlers()
 {
     bool init = true;
-    init &= (bool)oDMXHandler;
-    init &= (bool)oArtSyncHandler;
-    init &= (bool)oDiscoveryHandler;
+    init &= (bool)m_oDMXHandler;
+    init &= (bool)m_oArtSyncHandler;
+    init &= (bool)m_oDiscoveryHandler;
     if (!init)
     {
         ESP_LOGE(TAG, "All handlers must be registered");
@@ -112,13 +112,13 @@ void ArtNetServer::FreeRTOSTask(void *pvParameters)
 
 void CommonServer::HandleIncommingMessage(size_t msgLength, char * senderIP)
 {
-    oMessageHandler(aRxBuffer.data(), msgLength, senderIP);
+    m_oMessageHandler(m_aRxBuffer.data(), msgLength, senderIP);
 }
 
 void CommonServer::CheckHandlers()
 {
     bool init = true;
-    init &= (bool)oMessageHandler;
+    init &= (bool)m_oMessageHandler;
     if (!init)
     {
         ESP_LOGE(TAG, "All handlers must be registered");

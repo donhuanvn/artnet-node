@@ -8,11 +8,11 @@
 
 class WifiSTA
 {
-    bool bInit;
-    esp_event_handler_instance_t ins_any_id;
-    esp_event_handler_instance_t ins_got_ip;
-    esp_netif_t * netif;
-    std::string sGotIP;
+    bool m_bInit;
+    esp_event_handler_instance_t m_ins_any_id;
+    esp_event_handler_instance_t m_ins_got_ip;
+    esp_netif_t * m_netif;
+    std::string m_sGotIP;
     friend void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
 public:
     static WifiSTA& GetInstance()
@@ -26,13 +26,13 @@ public:
     void Config(const std::string &s_ssid, const std::string &s_password);
     bool HasValidConfig();
     std::pair<std::string, std::string> GetConfig();
-    std::string GetIP() { return sGotIP; }
+    std::string GetIP() { return m_sGotIP; }
 };
 
 class WifiAP
 {
-    bool bInit;
-    esp_event_handler_instance_t ins_any_id;
+    bool m_bInit;
+    esp_event_handler_instance_t m_ins_any_id;
     esp_netif_t * netif;
 public:
     static WifiAP& GetInstance()

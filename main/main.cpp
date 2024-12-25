@@ -10,7 +10,7 @@
 #include "lwip/sockets.h"
 #include "udp_server.h"
 #include "miscellaneous.h"
-
+#include "models/settings.h"
 
 static const char *TAG = "Main";
 
@@ -21,6 +21,8 @@ static void hello_task(void *pvParameters)
     {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         ESP_LOGI(TAG, "Sleep 10 seconds");
+        std::string IP = WifiSTA::GetInstance().GetIP();
+        ESP_LOGI(TAG, "IP: %s", IP.c_str());
     }
 }
 
@@ -257,6 +259,8 @@ extern "C" void app_main(void)
         xTaskCreate(ArtNetServer::FreeRTOSTask, "ArtNetServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
         xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     }
+
+    Settings::GetInstance().Log();
 
     // xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);

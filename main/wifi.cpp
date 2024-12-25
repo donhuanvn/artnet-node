@@ -65,7 +65,7 @@ void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t even
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         char buffer[20];
         sprintf(buffer, IPSTR, IP2STR(&event->ip_info.ip));
-        WifiSTA::GetInstance().sGotIP = buffer;
+        WifiSTA::GetInstance().m_sGotIP = buffer;
 
         wifi_config_t wifi_config;
         ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &wifi_config));
@@ -95,34 +95,34 @@ void WifiSTA::Init()
         WifiAP::GetInstance().Deinit();
     }
 
-    netif = esp_netif_create_default_wifi_sta();
+    m_netif = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_sta_event_handler, NULL, &ins_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_sta_event_handler, NULL, &ins_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_sta_event_handler, NULL, &m_ins_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_sta_event_handler, NULL, &m_ins_got_ip));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG_STA, "wifi_sta_init finished.");
 
-    bInit = true;
+    m_bInit = true;
 }
 
 bool WifiSTA::HasInit()
 {
-    return bInit;
+    return m_bInit;
 }
 
 void WifiSTA::Deinit()
 {
     ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, ins_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, ins_got_ip));
-    esp_netif_destroy_default_wifi(netif);
-    bInit = false;
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, m_ins_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, m_ins_got_ip));
+    esp_netif_destroy_default_wifi(m_netif);
+    m_bInit = false;
 }
 
 void WifiSTA::Config(const std::string &s_ssid, const std::string &s_password)
@@ -201,7 +201,7 @@ void WifiAP::Init()
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_ap_event_handler, NULL, &ins_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_ap_event_handler, NULL, &m_ins_any_id));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -211,20 +211,20 @@ void WifiAP::Init()
     ESP_LOGI(TAG_AP, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
              wifi_config.ap.ssid, wifi_config.ap.password, wifi_config.ap.channel);
 
-    bInit = true;
+    m_bInit = true;
 }
 
 bool WifiAP::HasInit()
 {
-    return bInit;
+    return m_bInit;
 }
 
 void WifiAP::Deinit()
 {
     ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, ins_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, m_ins_any_id));
     esp_netif_destroy_default_wifi(netif);
-    bInit = false;
+    m_bInit = false;
 }
 
 void WifiAP::Config(const std::string &s_ssid, const std::string &s_password)
