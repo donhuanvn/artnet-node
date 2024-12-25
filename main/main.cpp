@@ -11,6 +11,7 @@
 #include "udp_server.h"
 #include "miscellaneous.h"
 #include "models/settings.h"
+#include "models/info.h"
 
 static const char *TAG = "Main";
 
@@ -21,8 +22,8 @@ static void hello_task(void *pvParameters)
     {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         ESP_LOGI(TAG, "Sleep 10 seconds");
-        std::string IP = WifiSTA::GetInstance().GetIP();
-        ESP_LOGI(TAG, "IP: %s", IP.c_str());
+        Settings::GetInstance().Log();
+        InfoModel::GetInstance().Log();
     }
 }
 
@@ -260,9 +261,7 @@ extern "C" void app_main(void)
         xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     }
 
-    Settings::GetInstance().Log();
-
-    // xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(hello_task, "hello_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_json_task, "test_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_task, "test_nvs_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     // xTaskCreate(test_nvs_and_json_task, "test_nvs_and_json_task", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
