@@ -1,4 +1,5 @@
 #include "miscellaneous.h"
+#include "models/settings.h"
 
 HWStatus::Mode HWStatus::GetMode()
 {
@@ -16,4 +17,9 @@ float HWStatus::GetSpeedValue()
 {
     // Todo
     return -1.0;
+}
+
+int32_t DMX512Message::GetUniverse()
+{
+    return pData[15] << 8 | pData[14];
 }

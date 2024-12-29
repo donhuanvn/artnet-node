@@ -13,6 +13,7 @@
 #include "models/settings.h"
 #include "models/info.h"
 #include "models/status.h"
+#include "port.h"
 
 static const char *TAG = "Main";
 
@@ -23,8 +24,9 @@ static void hello_task(void *pvParameters)
     {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
         ESP_LOGI(TAG, "Sleep 10 seconds");
-        Settings::GetInstance().Log();
-        InfoModel::GetInstance().Log();
+        ESP_LOGI(TAG, "Free Heap %d Kbytes", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) >> 10);
+        // Settings::GetInstance().Log();
+        // InfoModel::GetInstance().Log();
     }
 }
 

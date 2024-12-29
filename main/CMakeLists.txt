@@ -7,6 +7,7 @@ idf_component_register(SRCS
     "udp_server.cpp"
     "main.cpp"
     "wifi.cpp"
+    "port.cpp"
     "udp_server.cpp"
     INCLUDE_DIRS "." "${CMAKE_CURRENT_BINARY_DIR}/")
 

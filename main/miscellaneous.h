@@ -1,6 +1,13 @@
 #ifndef __MISCELLANEOUS_H__
 #define __MISCELLANEOUS_H__
 
+#include <stdio.h>
+#include <memory>
+
+#ifndef PROJECT_DMX_MESSAGE_BUFFER_SIZE
+#define PROJECT_DMX_MESSAGE_BUFFER_SIZE 530
+#endif
+
 struct cJSON;
 
 class HWStatus
@@ -15,5 +22,29 @@ public:
     static float GetBrightValue();
     static float GetSpeedValue();
 };
+
+class DMX512Message
+{
+    char *pData;
+
+public:
+    DMX512Message()
+    {
+        pData = new char[PROJECT_DMX_MESSAGE_BUFFER_SIZE];
+    }
+    DMX512Message(char * pBuffer)
+    {
+        pData = pBuffer;
+    }
+    ~DMX512Message()
+    {
+        delete[] pData;
+    }
+    int32_t GetUniverse();
+    operator char *() const { return pData; }
+    operator uint8_t *() const { return (uint8_t *)pData; }
+};
+
+typedef std::shared_ptr<DMX512Message> DMX512MessageShared;
 
 #endif /* __MISCELLANEOUS_H__ */

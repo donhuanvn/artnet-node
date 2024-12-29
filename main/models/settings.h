@@ -6,6 +6,18 @@
 #include <esp_err.h>
 #include "cJSON.h"
 #include "nvs.h"
+#include <list>
+#include <array>
+
+#ifndef PROJECT_NUMBER_OF_PORTS
+#define PROJECT_NUMBER_OF_PORTS 8
+#endif
+
+#ifndef PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES
+#define PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES 40
+#endif
+
+typedef std::array<int32_t, PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES> UnivToPort_t;
 
 class Settings
 {
@@ -24,7 +36,12 @@ class Settings
     std::string m_sProductID;
     bool m_bArtNetSyncEnabled;
 
+    UnivToPort_t m_aUnivToPort;
+    std::array<size_t, PROJECT_NUMBER_OF_PORTS + 1> m_aUnivCount; // 1-based index port number
+
     nvs_handle_t m_s32NVSHandle;
+
+    void UpdateUniverseCountForPort(const UnivToPort_t& aMap);
 
 public:
     static Settings &GetInstance()
@@ -79,6 +96,11 @@ public:
 
     bool GetArtNetSyncEnabled() const { return m_bArtNetSyncEnabled; }
     esp_err_t SetArtNetSyncEnabled(bool bEnabled);
+
+    const UnivToPort_t &GetUnivToPort() const { return m_aUnivToPort; }
+    esp_err_t SetUnivToPort(const UnivToPort_t &aUnivToPort);
+    size_t QueryUnivCount(int32_t s32PortNumber);
+    bool IsBelongToPort(int32_t s32Universe, int32_t s32PortNumber);
 };
 
 #endif /* __ARTNET_NODE_SETTINGS_MODEL_H__ */

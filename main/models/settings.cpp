@@ -106,6 +106,36 @@ Settings::Settings()
     {
         m_bArtNetSyncEnabled = (bool)bEnabled;
     }
+
+    err = nvs_get_str(m_s32NVSHandle, "map_univ2port", buffer, &len);
+    if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_aUnivToPort.fill(0);
+    }
+    else
+    {
+        cJSON * json = cJSON_Parse(buffer);
+        if (json == NULL)
+        {
+            m_aUnivToPort.fill(0);
+        }
+        else if (!cJSON_IsArray(json) || cJSON_GetArraySize(json) != PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES)
+        {
+            m_aUnivToPort.fill(0);
+            cJSON_Delete(json);
+        }
+        else
+        {
+            // index: universe, item: port number.
+            for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+            {
+                cJSON * pItem = cJSON_GetArrayItem(json, i);
+                m_aUnivToPort[i] = cJSON_GetNumberValue(pItem);
+            }
+            cJSON_Delete(json);
+            UpdateUniverseCountForPort(m_aUnivToPort);
+        }
+    }
 }
 
 void Settings::FromJson(const cJSON *json)
@@ -195,6 +225,18 @@ void Settings::FromJson(const cJSON *json)
     {
         SetArtNetSyncEnabled(cJSON_IsTrue(pItem));
     }
+
+    pItem = cJSON_GetObjectItemCaseSensitive(json, "MapUniverseToPort");
+    if (cJSON_IsArray(pItem))
+    {
+        UnivToPort_t aMap(m_aUnivToPort);
+        for (int32_t i = 0; i < cJSON_GetArraySize(pItem); ++i)
+        {
+            cJSON *pJsonPort = cJSON_GetArrayItem(pItem, i);
+            aMap[i] = cJSON_GetNumberValue(pJsonPort);
+        }
+        SetUnivToPort(aMap);
+    }
 }
 
 cJSON *Settings::ToJson()
@@ -215,6 +257,11 @@ cJSON *Settings::ToJson()
     cJSON_AddStringToObject(pJson, "Model", m_sModel.c_str());
     cJSON_AddStringToObject(pJson, "ProductID", m_sProductID.c_str());
     cJSON_AddBoolToObject(pJson, "ArtNetSync", m_bArtNetSyncEnabled);
+    cJSON * pJsonArray = cJSON_AddArrayToObject(pJson, "MapUniverseToPort");
+    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+    {
+        cJSON_AddItemToArray(pJsonArray, cJSON_CreateNumber(m_aUnivToPort[i]));
+    }
 
     return pJson;
 }
@@ -362,4 +409,47 @@ esp_err_t Settings::SetArtNetSyncEnabled(bool bEnabled)
         m_bArtNetSyncEnabled = bEnabled;
     }
     return err;
+}
+
+esp_err_t Settings::SetUnivToPort(const UnivToPort_t& aUnivToPort)
+{
+    cJSON * json = cJSON_CreateArray();
+    
+    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+    {
+        cJSON_AddItemToArray(json, cJSON_CreateNumber(aUnivToPort[i]));
+    }
+
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "map_univ2port", cJSON_PrintUnformatted(json)));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_aUnivToPort = aUnivToPort;
+        UpdateUniverseCountForPort(aUnivToPort);
+    }
+    cJSON_Delete(json);
+    return err;
+}
+
+size_t Settings::QueryUnivCount(int32_t s32PortNumber)
+{
+    return m_aUnivCount[s32PortNumber];
+}
+
+bool Settings::IsBelongToPort(int32_t s32Universe, int32_t s32PortNumber)
+{
+    return m_aUnivToPort[s32Universe] == s32PortNumber;
+}
+
+void Settings::UpdateUniverseCountForPort(const UnivToPort_t& aUnivToPort)
+{
+    m_aUnivCount.fill(0);
+    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; i++)
+    {
+        if (aUnivToPort[i] < 1 || aUnivToPort[i] > PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES)
+        {
+            ESP_ERROR_CHECK(ESP_ERR_INVALID_ARG);
+        }
+        m_aUnivToPort[aUnivToPort[i]]++;
+    }
 }
