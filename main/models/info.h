@@ -12,7 +12,7 @@ class InfoModel
     std::string m_sHostAppIP;
     nvs_handle_t m_s32NVSHandle;
 public:
-    static InfoModel GetInstance()
+    static InfoModel& GetInstance()
     {
         static InfoModel oIns;
         return oIns;

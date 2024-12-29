@@ -12,6 +12,7 @@
 #include "miscellaneous.h"
 #include "models/settings.h"
 #include "models/info.h"
+#include "models/status.h"
 
 static const char *TAG = "Main";
 
@@ -171,6 +172,7 @@ static void test_nvs_and_json_task(void *pvParameters)
                         }
                     }
                 }
+                delete json_string;
             }
         }
 
