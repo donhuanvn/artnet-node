@@ -1,4 +1,5 @@
 build/
-sdkconfig
 sdkconfig.old
 settings.json
+managed_components
+# dependencies.lock

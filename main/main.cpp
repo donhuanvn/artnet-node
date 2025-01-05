@@ -1,13 +1,8 @@
-#include <stdio.h>
+#include "Arduino.h"
 #include "version.h"
-#include <esp_log.h>
-#include "freertos/FreeRTOS.h"
-#include "cJSON.h"
 #include "nvs_flash.h"
 #include "wifi.h"
-#include "esp_wifi.h"
 #include "config.h"
-#include "lwip/sockets.h"
 #include "udp_server.h"
 #include "miscellaneous.h"
 #include "models/settings.h"
@@ -232,6 +227,12 @@ extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "ArtNet Node - Full Master Wireless");
     FWVersion::log();
+
+    initArduino();
+    Serial.begin(115200);
+    while(!Serial){
+        ; // wait for serial port to connect
+    }
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
