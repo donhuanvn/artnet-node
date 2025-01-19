@@ -1,6 +1,9 @@
 #include "settings.h"
 #include "esp_log.h"
 #include "wifi.h"
+#include "string.h"
+
+#define BUFFER_LENGTH 1024
 
 static const char *TAG = "Settings-Model";
 
@@ -19,27 +22,36 @@ Settings::Settings()
         m_sSitePassword = pass;
     }
     
-    char buffer[1024];
-    size_t len = 0;
+    char buffer[BUFFER_LENGTH];
+    size_t len = BUFFER_LENGTH;
 
     err = nvs_get_str(m_s32NVSHandle, "static_ip", buffer, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_sStaticIP.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_sStaticIP = "";
     }
     else
     {
-        m_sStaticIP.assign(buffer, len);
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
+    len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "led_type", buffer, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_sLedType.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_sLedType = "";
     }
     else
     {
-        m_sLedType.assign(buffer, len);
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
     err = nvs_get_i32(m_s32NVSHandle, "time_high", &m_s32TimeHigh);
@@ -47,17 +59,30 @@ Settings::Settings()
     {
         m_s32TimeHigh = -1;
     }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
 
     err = nvs_get_i32(m_s32NVSHandle, "time_low", &m_s32TimeLow);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_s32TimeLow = -1;
     }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+    
 
     err = nvs_get_i32(m_s32NVSHandle, "start_universe", &m_s32StartUniverse);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_s32StartUniverse = -1;
+    }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
     err = nvs_get_i32(m_s32NVSHandle, "no_universes", &m_s32NoUniverses);
@@ -65,76 +90,121 @@ Settings::Settings()
     {
         m_s32NoUniverses = -1;
     }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
 
+    len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "identity", buffer, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_sIdentity.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_sIdentity = "";
     }
     else
     {
-        m_sIdentity.assign(buffer, len);
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
+    len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "model", buffer, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_sModel.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_sModel = "";
     }
     else
     {
-        m_sModel.assign(buffer, len);
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
+    len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "product_id", buffer, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_sProductID.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_sProductID = "";
     }
     else
     {
-        m_sProductID.assign(buffer, len);
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
     uint8_t bEnabled = 0; 
     err = nvs_get_u8(m_s32NVSHandle, "artnet_sync", &bEnabled);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_OK)
+    {
+        m_bArtNetSyncEnabled = (bool)bEnabled;
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
         m_bArtNetSyncEnabled = false;
     }
     else
     {
-        m_bArtNetSyncEnabled = (bool)bEnabled;
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
     }
 
-    err = nvs_get_str(m_s32NVSHandle, "map_univ2port", buffer, &len);
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "ports", buffer, &len);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_aUnivToPort.fill(0);
+        m_aPorts.fill(PortSettings());
     }
-    else
+    else if (err == ESP_OK)
     {
         cJSON * json = cJSON_Parse(buffer);
-        if (json == NULL)
+        if (!cJSON_IsArray(json) || cJSON_GetArraySize(json) != PROJECT_NUMBER_OF_PORTS)
         {
-            m_aUnivToPort.fill(0);
-        }
-        else if (!cJSON_IsArray(json) || cJSON_GetArraySize(json) != PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES)
-        {
-            m_aUnivToPort.fill(0);
-            cJSON_Delete(json);
+            m_aPorts.fill(PortSettings());
         }
         else
         {
-            // index: universe, item: port number.
-            for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+            // index: 0-based port number, item: port number.
+            for (int32_t i=0; i < PROJECT_NUMBER_OF_PORTS; ++i)
             {
-                cJSON * pItem = cJSON_GetArrayItem(json, i);
-                m_aUnivToPort[i] = cJSON_GetNumberValue(pItem);
+                cJSON * pPort = cJSON_GetArrayItem(json, i);
+                {
+                    cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "StartUniverse");
+                    if (pItem != NULL && cJSON_IsNumber(pItem))
+                    {
+                        m_aPorts[i].m_s32StartUniverse = cJSON_GetNumberValue(pItem);
+                    }
+                }
+                {
+                    cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "NoUniverses");
+                    if (pItem != NULL && cJSON_IsNumber(pItem))
+                    {
+                        m_aPorts[i].m_s32NoUniverses = cJSON_GetNumberValue(pItem);
+                    }
+                }
+                {
+                    cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "LedCount");
+                    if (pItem != NULL && cJSON_IsNumber(pItem))
+                    {
+                        m_aPorts[i].m_s32LedCount = cJSON_GetNumberValue(pItem);
+                    }
+                }
+                {
+                    cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "LedType");
+                    if (pItem != NULL && cJSON_IsString(pItem))
+                    {
+                        m_aPorts[i].m_sLedType = cJSON_GetStringValue(pItem);
+                    }
+                }
             }
-            cJSON_Delete(json);
-            UpdateUniverseCountForPort(m_aUnivToPort);
         }
+        cJSON_Delete(json);
     }
 }
 
@@ -226,16 +296,44 @@ void Settings::FromJson(const cJSON *json)
         SetArtNetSyncEnabled(cJSON_IsTrue(pItem));
     }
 
-    pItem = cJSON_GetObjectItemCaseSensitive(json, "MapUniverseToPort");
+    pItem = cJSON_GetObjectItemCaseSensitive(json, "Ports");
     if (cJSON_IsArray(pItem))
     {
-        UnivToPort_t aMap(m_aUnivToPort);
-        for (int32_t i = 0; i < cJSON_GetArraySize(pItem); ++i)
+        // 0-based index
+        for (int32_t i=0; i<cJSON_GetArraySize(pItem); ++i)
         {
-            cJSON *pJsonPort = cJSON_GetArrayItem(pItem, i);
-            aMap[i] = cJSON_GetNumberValue(pJsonPort);
+            cJSON *pPort = cJSON_GetArrayItem(pItem, i);
+            {
+                cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pPort, "StartUniverse");
+                if (cJSON_IsNumber(pPortItem))
+                {
+                    m_aPorts[i].m_s32StartUniverse = cJSON_GetNumberValue(pPortItem);
+                }
+            }
+            {
+                cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pPort, "NoUniverses");
+                if (cJSON_IsNumber(pPortItem))
+                {
+                    m_aPorts[i].m_s32NoUniverses = cJSON_GetNumberValue(pPortItem);
+                }
+            }
+            {
+                cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pPort, "LedCount");
+                if (cJSON_IsNumber(pPortItem))
+                {
+                    m_aPorts[i].m_s32LedCount = cJSON_GetNumberValue(pPortItem);
+                }
+            }
+            {
+                cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pPort, "LedType");
+                if (cJSON_IsString(pPortItem))
+                {
+                    m_aPorts[i].m_sLedType = cJSON_GetStringValue(pPortItem);
+                }
+            }
         }
-        SetUnivToPort(aMap);
+
+        SavePorts();
     }
 }
 
@@ -257,11 +355,18 @@ cJSON *Settings::ToJson()
     cJSON_AddStringToObject(pJson, "Model", m_sModel.c_str());
     cJSON_AddStringToObject(pJson, "ProductID", m_sProductID.c_str());
     cJSON_AddBoolToObject(pJson, "ArtNetSync", m_bArtNetSyncEnabled);
-    cJSON * pJsonArray = cJSON_AddArrayToObject(pJson, "MapUniverseToPort");
-    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+
+    cJSON * pPorts = cJSON_CreateArray();
+    for (int32_t i=0; i<PROJECT_NUMBER_OF_PORTS; ++i)
     {
-        cJSON_AddItemToArray(pJsonArray, cJSON_CreateNumber(m_aUnivToPort[i]));
+        cJSON * pPort = cJSON_CreateObject();
+        cJSON_AddNumberToObject(pPort, "StartUniverse", m_aPorts[i].m_s32StartUniverse);
+        cJSON_AddNumberToObject(pPort, "NoUniverses", m_aPorts[i].m_s32NoUniverses);
+        cJSON_AddNumberToObject(pPort, "LedCount", m_aPorts[i].m_s32LedCount);
+        cJSON_AddStringToObject(pPort, "LedType", m_aPorts[i].m_sLedType.c_str());
+        cJSON_AddItemToArray(pPorts, pPort);
     }
+    cJSON_AddItemToObject(pJson, "Ports", pPorts);
 
     return pJson;
 }
@@ -269,8 +374,10 @@ cJSON *Settings::ToJson()
 void Settings::Log()
 {
     cJSON * json = ToJson();
-    ESP_LOGI(TAG, "Settings: \n%s", cJSON_Print(json));
+    char * pData = cJSON_Print(json);
+    ESP_LOGI(TAG, "Settings: \n%s", pData);
     cJSON_Delete(json);
+    free(pData);
 }
 
 esp_err_t Settings::SetBroadcastSSID(const std::string &sSsid)
@@ -411,45 +518,24 @@ esp_err_t Settings::SetArtNetSyncEnabled(bool bEnabled)
     return err;
 }
 
-esp_err_t Settings::SetUnivToPort(const UnivToPort_t& aUnivToPort)
+esp_err_t Settings::SavePorts()
 {
     cJSON * json = cJSON_CreateArray();
-    
-    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; ++i)
+
+    for (int32_t i=0; i<PROJECT_NUMBER_OF_PORTS; ++i)
     {
-        cJSON_AddItemToArray(json, cJSON_CreateNumber(aUnivToPort[i]));
+        cJSON * pPort = cJSON_CreateObject();
+        cJSON_AddNumberToObject(pPort, "StartUniverse", m_aPorts[i].m_s32StartUniverse);
+        cJSON_AddNumberToObject(pPort, "NoUniverses", m_aPorts[i].m_s32NoUniverses);
+        cJSON_AddNumberToObject(pPort, "LedCount", m_aPorts[i].m_s32LedCount);
+        cJSON_AddStringToObject(pPort, "LedType", m_aPorts[i].m_sLedType.c_str());
+        cJSON_AddItemToArray(json, pPort);
     }
 
-    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "map_univ2port", cJSON_PrintUnformatted(json)));
+    char * pData = cJSON_PrintUnformatted(json);
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "ports", pData));
     esp_err_t err = nvs_commit(m_s32NVSHandle);
-    if (err == ESP_OK)
-    {
-        m_aUnivToPort = aUnivToPort;
-        UpdateUniverseCountForPort(aUnivToPort);
-    }
     cJSON_Delete(json);
+    free(pData);
     return err;
-}
-
-size_t Settings::QueryUnivCount(int32_t s32PortNumber)
-{
-    return m_aUnivCount[s32PortNumber];
-}
-
-bool Settings::IsBelongToPort(int32_t s32Universe, int32_t s32PortNumber)
-{
-    return m_aUnivToPort[s32Universe] == s32PortNumber;
-}
-
-void Settings::UpdateUniverseCountForPort(const UnivToPort_t& aUnivToPort)
-{
-    m_aUnivCount.fill(0);
-    for (int32_t i=0; i<PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES; i++)
-    {
-        if (aUnivToPort[i] < 1 || aUnivToPort[i] > PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES)
-        {
-            ESP_ERROR_CHECK(ESP_ERR_INVALID_ARG);
-        }
-        m_aUnivToPort[aUnivToPort[i]]++;
-    }
 }

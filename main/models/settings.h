@@ -17,10 +17,19 @@
 #define PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES 40
 #endif
 
-typedef std::array<int32_t, PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES> UnivToPort_t;
+
 
 class Settings
 {
+    typedef struct PortSettings
+    {
+        int32_t m_s32StartUniverse;
+        int32_t m_s32NoUniverses;
+        int32_t m_s32LedCount;
+        std::string m_sLedType;
+        PortSettings() : m_s32StartUniverse(-1), m_s32NoUniverses(-1), m_s32LedCount(-1) {}
+    } PortSettings;
+
     std::string m_sBroadcastSSID;
     std::string m_sBroadcastPassword;
     std::string m_sSiteSSID;
@@ -35,13 +44,11 @@ class Settings
     std::string m_sModel;
     std::string m_sProductID;
     bool m_bArtNetSyncEnabled;
-
-    UnivToPort_t m_aUnivToPort;
-    std::array<size_t, PROJECT_NUMBER_OF_PORTS + 1> m_aUnivCount; // 1-based index port number
+    std::array<PortSettings, PROJECT_NUMBER_OF_PORTS> m_aPorts; // 0-based index
 
     nvs_handle_t m_s32NVSHandle;
 
-    void UpdateUniverseCountForPort(const UnivToPort_t& aMap);
+    esp_err_t SavePorts();
 
 public:
     static Settings &GetInstance()
@@ -97,10 +104,10 @@ public:
     bool GetArtNetSyncEnabled() const { return m_bArtNetSyncEnabled; }
     esp_err_t SetArtNetSyncEnabled(bool bEnabled);
 
-    const UnivToPort_t &GetUnivToPort() const { return m_aUnivToPort; }
-    esp_err_t SetUnivToPort(const UnivToPort_t &aUnivToPort);
-    size_t QueryUnivCount(int32_t s32PortNumber);
-    bool IsBelongToPort(int32_t s32Universe, int32_t s32PortNumber);
+    int32_t GetStartUniverse(int32_t s32PortNumber) const { return m_aPorts[s32PortNumber].m_s32StartUniverse; }
+    int32_t GetNoUniverses(int32_t s32PortNumber) const { return m_aPorts[s32PortNumber].m_s32NoUniverses; }
+    int32_t GetLedCount(int32_t s32PortNumber) const { return m_aPorts[s32PortNumber].m_s32LedCount; }
+    std::string GetLedType(int32_t s32PortNumber) const { return m_aPorts[s32PortNumber].m_sLedType; }
 };
 
 #endif /* __ARTNET_NODE_SETTINGS_MODEL_H__ */

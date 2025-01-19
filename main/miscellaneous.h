@@ -41,10 +41,7 @@ public:
         delete[] pData;
     }
     int32_t GetUniverse();
-    operator char *() const { return pData; }
-    operator uint8_t *() const { return (uint8_t *)pData; }
+    char * GetBuffer() { return pData; }
 };
-
-typedef std::shared_ptr<DMX512Message> DMX512MessageShared;
 
 #endif /* __MISCELLANEOUS_H__ */
