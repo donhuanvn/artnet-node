@@ -1,9 +1,13 @@
 #include "udp_server.h"
 #include <esp_log.h>
 #include "config.h"
-#include "lwip/sockets.h"
 
 const char * TAG = "UDP-Server";
+
+int32_t ArtNetServer::m_s32Socket = -1;
+sockaddr_storage ArtNetServer::m_stSourceAddress;
+int32_t CommonServer::m_s32Socket = -1;
+sockaddr_storage CommonServer::m_stSourceAddress;
 
 void ArtNetServer::HandleIncommingMessage(size_t msgLength, char * senderIP)
 {
@@ -57,8 +61,8 @@ void ArtNetServer::FreeRTOSTask(void *pvParameters)
 
     while (true)
     {
-        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-        if (sock < 0)
+        m_s32Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        if (m_s32Socket < 0)
         {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
@@ -69,23 +73,22 @@ void ArtNetServer::FreeRTOSTask(void *pvParameters)
         struct timeval timeout;
         timeout.tv_sec = 3600;
         timeout.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        setsockopt(m_s32Socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-        int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        int err = bind(m_s32Socket, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         if (err < 0)
         {
             ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
         }
         ESP_LOGI(TAG, "Socket bound, port %d", PROJECT_UDP_ARTNET_PORT);
 
-        struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
-        socklen_t socklen = sizeof(source_addr);
+        socklen_t socklen = sizeof(m_stSourceAddress);
 
         while (true)
         {
             char * buffer = ArtNetServer::GetInstance().GetBuffer();
             size_t bufferlen = ArtNetServer::GetInstance().GetBufferLength() - 1;
-            int len = recvfrom(sock, buffer, bufferlen, 0, (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(m_s32Socket, buffer, bufferlen, 0, (struct sockaddr *)&m_stSourceAddress, &socklen);
             // Error occurred during receiving
             if (len < 0)
             {
@@ -93,20 +96,28 @@ void ArtNetServer::FreeRTOSTask(void *pvParameters)
                 break;
             }
             // Data received
-            else if (source_addr.ss_family == PF_INET)
+            else if (m_stSourceAddress.ss_family == PF_INET)
             {
                 // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
+                inet_ntoa_r(((struct sockaddr_in *)&m_stSourceAddress)->sin_addr, addr_str, sizeof(addr_str) - 1);
                 ArtNetServer::GetInstance().HandleIncommingMessage(len, addr_str);
             }
         }
 
-        if (sock != -1)
+        if (m_s32Socket != -1)
         {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
+            shutdown(m_s32Socket, 0);
+            close(m_s32Socket);
         }
+    }
+}
+
+void ArtNetServer::Response(const char * pBuffer, size_t u32BufferSize)
+{
+    int err = sendto(m_s32Socket, pBuffer, u32BufferSize, 0, (struct sockaddr *)&m_stSourceAddress, sizeof(m_stSourceAddress));
+    if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
     }
 }
 
@@ -140,8 +151,8 @@ void CommonServer::FreeRTOSTask(void *pvParameters)
 
     while (true)
     {
-        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-        if (sock < 0)
+        m_s32Socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        if (m_s32Socket < 0)
         {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
@@ -152,23 +163,22 @@ void CommonServer::FreeRTOSTask(void *pvParameters)
         struct timeval timeout;
         timeout.tv_sec = 3600;
         timeout.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        setsockopt(m_s32Socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-        int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        int err = bind(m_s32Socket, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         if (err < 0)
         {
             ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
         }
         ESP_LOGI(TAG, "Socket bound, port %d", PROJECT_UDP_COMMON_PORT);
 
-        struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
-        socklen_t socklen = sizeof(source_addr);
+        socklen_t socklen = sizeof(m_stSourceAddress);
 
         while (true)
         {
             char * buffer = CommonServer::GetInstance().GetBuffer();
             size_t bufferlen = CommonServer::GetInstance().GetBufferLength() - 1;
-            int len = recvfrom(sock, buffer, bufferlen, 0, (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(m_s32Socket, buffer, bufferlen, 0, (struct sockaddr *)&m_stSourceAddress, &socklen);
             // Error occurred during receiving
             if (len < 0)
             {
@@ -176,19 +186,27 @@ void CommonServer::FreeRTOSTask(void *pvParameters)
                 break;
             }
             // Data received
-            else if (source_addr.ss_family == PF_INET)
+            else if (m_stSourceAddress.ss_family == PF_INET)
             {
                 // Get the sender's ip address as string
-                inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
+                inet_ntoa_r(((struct sockaddr_in *)&m_stSourceAddress)->sin_addr, addr_str, sizeof(addr_str) - 1);
                 CommonServer::GetInstance().HandleIncommingMessage(len, addr_str);
             }
         }
 
-        if (sock != -1)
+        if (m_s32Socket != -1)
         {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sock, 0);
-            close(sock);
+            shutdown(m_s32Socket, 0);
+            close(m_s32Socket);
         }
+    }
+}
+
+void CommonServer::Response(const char * pBuffer, size_t u32BufferSize)
+{
+    int err = sendto(m_s32Socket, pBuffer, u32BufferSize, 0, (struct sockaddr *)&m_stSourceAddress, sizeof(m_stSourceAddress));
+    if (err < 0) {
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
     }
 }

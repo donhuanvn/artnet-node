@@ -53,13 +53,91 @@ static void artsync_message_handler(const char * msg, size_t len, const char * s
 static void discovery_message_handler(const char * msg, size_t len, const char * sender)
 {
     ESP_LOGI(TAG, "discovery_message_handler");
-    // Todo: return information to the source, update the host ip.
+    InfoModel::GetInstance().SetHostAppIP(sender);
+    char * pResponse = cJSON_PrintUnformatted(InfoModel::GetInstance().ToJson());
+    ArtNetServer::GetInstance().Response(pResponse, strlen(pResponse));
+    delete pResponse;
 }
 
 static void common_message_handler(const char * msg, size_t len, const char * sender)
 {
     ESP_LOGI(TAG, "common_message_handler");
     // Todo: factory reset, setting, query settings, query status, query info
+    ESP_LOGI(TAG, "Message '%s'", msg);
+
+    cJSON * pRequest = cJSON_ParseWithLength(msg, len);
+    cJSON * pResponse = cJSON_CreateObject();
+    do
+    {
+        if (!cJSON_IsObject(pRequest))
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Invalid request");
+            cJSON_AddNumberToObject(pResponse, "error_code", 400);
+            break;
+        }
+
+        cJSON * pAction = cJSON_GetObjectItemCaseSensitive(pRequest, "action");
+        if (!cJSON_IsString(pAction))
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Invalid request");
+            cJSON_AddNumberToObject(pResponse, "error_code", 400);
+            break;
+        }
+
+        std::string sAction(pAction->valuestring);
+        if (sAction == "factory_reset")
+        {
+            ESP_LOGI(TAG, "factory_reset");
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            cJSON_AddStringToObject(pResponse, "message", "Factory reset done");
+            cJSON_AddNumberToObject(pResponse, "error_code", 200);
+        }
+        else if (sAction == "update_setting")
+        {
+            ESP_LOGI(TAG, "update_setting");
+            cJSON * pData = cJSON_GetObjectItemCaseSensitive(pRequest, "data");
+            if (!cJSON_IsObject(pData))
+            {
+                cJSON_AddStringToObject(pResponse, "message", "Wrong data");
+                cJSON_AddNumberToObject(pResponse, "error_code", 400);
+                break;
+            }
+            Settings::GetInstance().FromJson(pData);
+            cJSON_AddStringToObject(pResponse, "message", "Update setting done");
+            cJSON_AddNumberToObject(pResponse, "error_code", 200);
+            cJSON_AddItemToObject(pResponse, "data", Settings::GetInstance().ToJson());
+        }
+        else if (sAction == "read_setting")
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Read setting done");
+            cJSON_AddNumberToObject(pResponse, "error_code", 200);
+            cJSON_AddItemToObject(pResponse, "data", Settings::GetInstance().ToJson());
+        }
+        else if (sAction == "read_status")
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Read status done");
+            cJSON_AddNumberToObject(pResponse, "error_code", 200);
+            cJSON_AddItemToObject(pResponse, "data", Status::GetInstance().ToJson());
+        }
+        else if (sAction == "read_info")
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Read info done");
+            cJSON_AddNumberToObject(pResponse, "error_code", 200);
+            cJSON_AddItemToObject(pResponse, "data", InfoModel::GetInstance().ToJson());
+        }
+        else
+        {
+            cJSON_AddStringToObject(pResponse, "message", "Invalid action");
+            cJSON_AddNumberToObject(pResponse, "error_code", 400);
+            break;
+        }
+    } while (false);
+    
+    char * pMsg = cJSON_PrintUnformatted(pResponse);
+    CommonServer::GetInstance().Response(pMsg, strlen(pMsg));
+    delete pRequest;
+    delete pResponse;
+    delete pMsg;
 }
 
 extern "C" void app_main(void)
