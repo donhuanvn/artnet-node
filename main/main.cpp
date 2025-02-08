@@ -12,6 +12,13 @@
 
 static const char *TAG = "Main";
 
+static void esp_restart_handle(TimerHandle_t xTimer)
+{
+    esp_restart();
+}
+
+static TimerHandle_t esp_restart_timer = xTimerCreate("esp_restart_timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, &esp_restart_handle);
+
 static void hello_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Hello Task starts");
@@ -91,6 +98,7 @@ static void common_message_handler(const char * msg, size_t len, const char * se
             ESP_ERROR_CHECK(nvs_flash_erase());
             cJSON_AddStringToObject(pResponse, "message", "Factory reset done");
             cJSON_AddNumberToObject(pResponse, "error_code", 200);
+            xTimerStart(esp_restart_timer, portMAX_DELAY);
         }
         else if (sAction == "update_setting")
         {
@@ -187,7 +195,7 @@ extern "C" void app_main(void)
         xTaskCreate(Ports::FreeRTOSTask, "Ports::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 1, NULL);
     }
 
-    // static const char * pSettings = "{\"BroadcastSSID\":\"ESP_D0FC29\",\"BroadcastPassword\":\"\",\"SiteSSID\":\"P102\",\"SitePassword\":\"123567890\",\"StaticIP\":\"\",\"LedType\":\"\",\"TimeHigh\":-1,\"TimeLow\":-1,\"StartUniverse\":0,\"NoUniverses\":24,\"Identity\":\"\",\"Model\":\"\",\"ProductID\":\"\",\"ArtNetSync\":false,\"Ports\":[{\"StartUniverse\":0,\"NoUniverses\":6,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":6,\"NoUniverses\":6,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"}]}";
+    // static const char * pSettings = "{\"BroadcastSSID\":\"ESP_D0FC29\",\"BroadcastPassword\":\"\",\"SiteSSID\":\"Bo home-Ext\",\"SitePassword\":\"namnamnam\",\"StaticIP\":\"\",\"LedType\":\"\",\"TimeHigh\":-1,\"TimeLow\":-1,\"StartUniverse\":0,\"NoUniverses\":24,\"Identity\":\"\",\"Model\":\"\",\"ProductID\":\"\",\"ArtNetSync\":false,\"Ports\":[{\"StartUniverse\":0,\"NoUniverses\":6,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":6,\"NoUniverses\":6,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"},{\"StartUniverse\":-1,\"NoUniverses\":-1,\"LedCount\":1020,\"LedType\":\"SM16703\"}]}";
     // cJSON * json = cJSON_Parse(pSettings);
     // Settings::GetInstance().FromJson(json);
     // cJSON_Delete(json);
