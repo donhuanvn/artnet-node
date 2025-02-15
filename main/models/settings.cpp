@@ -11,20 +11,74 @@ Settings::Settings()
 {
     esp_err_t err;
     ESP_ERROR_CHECK(nvs_open("settings", NVS_READWRITE, &m_s32NVSHandle));
-    {
-        auto [ssid, pass] = WifiAP::GetInstance().GetConfig();
-        m_sBroadcastSSID = ssid;
-        m_sBroadcastPassword = pass;
-    }
-    {
-        auto [ssid, pass] = WifiSTA::GetInstance().GetConfig();
-        m_sSiteSSID = ssid;
-        m_sSitePassword = pass;
-    }
-    
     char buffer[BUFFER_LENGTH];
     size_t len = BUFFER_LENGTH;
 
+    err = nvs_get_str(m_s32NVSHandle, "bcast_ssid", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sBroadcastSSID.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sBroadcastSSID = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+
+    if (m_sBroadcastSSID.empty())
+    {
+        m_sBroadcastSSID = "ESP32_AP";
+    }
+
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "bcast_pass", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sBroadcastPassword.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sBroadcastPassword = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "site_ssid", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sSiteSSID.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sSiteSSID = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "site_password", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sSitePassword.assign(buffer, len);
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sSitePassword = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+
+    len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "static_ip", buffer, &len);
     if (err == ESP_OK)
     {
@@ -335,6 +389,49 @@ void Settings::FromJson(const cJSON *json)
 
         SavePorts();
     }
+
+    pItem = cJSON_GetObjectItemCaseSensitive(json, "LEDPort");
+    if (cJSON_IsObject(pItem))
+    {
+        cJSON * pPortNumber = cJSON_GetObjectItemCaseSensitive(pItem, "PortNumber");
+        if (cJSON_IsNumber(pPortNumber))
+        {
+            int32_t s32PortNumber = cJSON_GetNumberValue(pPortNumber);
+            if (s32PortNumber >=0 && s32PortNumber < PROJECT_NUMBER_OF_PORTS)
+            {
+                {
+                    cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pItem, "StartUniverse");
+                    if (cJSON_IsNumber(pPortItem))
+                    {
+                        m_aPorts[s32PortNumber].m_s32StartUniverse = cJSON_GetNumberValue(pPortItem);
+                    }
+                }
+                {
+                    cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pItem, "NoUniverses");
+                    if (cJSON_IsNumber(pPortItem))
+                    {
+                        m_aPorts[s32PortNumber].m_s32NoUniverses = cJSON_GetNumberValue(pPortItem);
+                    }
+                }
+                {
+                    cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pItem, "LedCount");
+                    if (cJSON_IsNumber(pPortItem))
+                    {
+                        m_aPorts[s32PortNumber].m_s32LedCount = cJSON_GetNumberValue(pPortItem);
+                    }
+                }
+                {
+                    cJSON *pPortItem = cJSON_GetObjectItemCaseSensitive(pItem, "LedType");
+                    if (cJSON_IsString(pPortItem))
+                    {
+                        m_aPorts[s32PortNumber].m_sLedType = cJSON_GetStringValue(pPortItem);
+                    }
+                }
+
+                SavePorts();
+            }
+        }
+    }
 }
 
 cJSON *Settings::ToJson()
@@ -382,30 +479,46 @@ void Settings::Log()
 
 esp_err_t Settings::SetBroadcastSSID(const std::string &sSsid)
 {
-    WifiAP::GetInstance().Config(sSsid, m_sBroadcastPassword);
-    m_sBroadcastSSID = sSsid;
-    return ESP_OK;
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "bcast_ssid", sSsid.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sBroadcastSSID = sSsid;
+    }
+    return err;
 }
 
 esp_err_t Settings::SetBroadcastPassword(const std::string &sPassword)
 {
-    WifiAP::GetInstance().Config(m_sBroadcastSSID, sPassword);
-    m_sBroadcastPassword = sPassword;
-    return ESP_OK;
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "bcast_pass", sPassword.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sBroadcastPassword = sPassword;
+    }
+    return err;
 }
 
 esp_err_t Settings::SetSiteSSID(const std::string &sSsid)
 {
-    WifiSTA::GetInstance().Config(sSsid, m_sSitePassword);
-    m_sSiteSSID = sSsid;
-    return ESP_OK;
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "site_ssid", sSsid.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sSiteSSID = sSsid;
+    }
+    return err;
 }
 
 esp_err_t Settings::SetSitePassword(const std::string &sPassword)
 {
-    WifiSTA::GetInstance().Config(m_sSiteSSID, sPassword);
-    m_sSitePassword = sPassword;
-    return ESP_OK;
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "site_password", sPassword.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sSitePassword = sPassword;
+    }
+    return err;
 }
 
 esp_err_t Settings::SetStaticIP(const std::string &sIP)

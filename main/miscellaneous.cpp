@@ -1,10 +1,19 @@
 #include "miscellaneous.h"
 #include "models/settings.h"
+#include "driver/gpio.h"
+#include "config.h"
+
 
 HWStatus::Mode HWStatus::GetMode()
 {
-    // Todo: Read status from corresponding GPIOs to decide which mode is set up.
-    return CONFIG_AND_RUN_DMX;
+    int32_t s32Level = gpio_get_level(static_cast<gpio_num_t>(PROJECT_GPIO_INPUT_MODE_SELECT_0));
+    switch (s32Level)
+    {
+    case 0:
+        return CONFIG_ONLY;
+    default:
+        return CONFIG_AND_RUN_DMX;
+    }
 }
 
 float HWStatus::GetBrightValue()

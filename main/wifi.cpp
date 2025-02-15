@@ -252,7 +252,7 @@ void WifiAP::Config(const std::string &s_ssid, const std::string &s_password)
     esp_err_t err = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
+        ESP_LOGE(TAG_AP, "Error (%s)", esp_err_to_name(err));
     }
     ESP_ERROR_CHECK(err);
 }

@@ -12,7 +12,7 @@
 #endif
 
 #ifndef UDP_COMMON_BUFFER_LEN
-#define UDP_COMMON_BUFFER_LEN 1024
+#define UDP_COMMON_BUFFER_LEN 2048
 #endif
 
 typedef std::function<void(const char *, size_t, const char *)> MessageHandler_t;

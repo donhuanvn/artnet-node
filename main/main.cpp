@@ -9,6 +9,7 @@
 #include "models/info.h"
 #include "models/status.h"
 #include "port.h"
+#include "driver/gpio.h"
 
 static const char *TAG = "Main";
 
@@ -27,12 +28,6 @@ static void hello_task(void *pvParameters)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         ESP_LOGI(TAG, "Free Heap %d Kbytes", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) >> 10);
         Status::GetInstance().Log();
-        static bool isPrinted = false;
-        if (!isPrinted)
-        {
-            isPrinted = true;
-            Settings::GetInstance().Log();
-        }
         vTaskDelay(9000 / portTICK_PERIOD_MS);
     }
 }
@@ -159,7 +154,19 @@ extern "C" void app_main(void)
         ; // wait for serial port to connect
     }
 
-    // ESP_ERROR_CHECK(nvs_flash_erase());
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&io_conf);
+
+    if (!gpio_get_level(static_cast<gpio_num_t>(PROJECT_GPIO_INPUT_MODE_SELECT_1)))
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+    }
+
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         // NVS partition was truncated and needs to be erased
@@ -168,6 +175,8 @@ extern "C" void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_init());
     }
     
+    Settings::GetInstance().Log();
+
     ESP_ERROR_CHECK(esp_netif_init());
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -175,12 +184,20 @@ extern "C" void app_main(void)
     HWStatus::Mode mode = HWStatus::GetMode();
     if (mode == HWStatus::Mode::CONFIG_ONLY)
     {
+        ESP_LOGI(TAG, "Running in configuration mode only");
+        std::string sSsid = Settings::GetInstance().GetBroadcastSSID();
+        std::string sPass = Settings::GetInstance().GetBroadcastPassword();
+        WifiAP::GetInstance().Config(sSsid, sPass);
         WifiAP::GetInstance().Init();
         CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
         xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     }
     else if (mode == HWStatus::Mode::CONFIG_AND_RUN_DMX)
     {
+        ESP_LOGI(TAG, "Running in configuration and running DMX");
+        std::string sSsid = Settings::GetInstance().GetSiteSSID();
+        std::string sPass = Settings::GetInstance().GetSitePassword();
+        WifiSTA::GetInstance().Config(sSsid, sPass);
         WifiSTA::GetInstance().Init();
 
         ArtNetServer::GetInstance().RegisterDMXMessageHandler(dmx_message_handler);
