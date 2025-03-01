@@ -20,6 +20,8 @@ public:
     InfoModel();
     std::string GetMAC(const std::string& sMacType = "WIFI-STA") const;
     std::string GetIP() const;
+    std::string GetNetmask() const;
+    std::string GetGatewayAddress() const;
     esp_err_t SetHostAppIP(const std::string& sHostAppIP);
     const std::string& GetHostAppIP() const { return m_sHostAppIP; }
     cJSON * ToJson();

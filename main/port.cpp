@@ -2,6 +2,7 @@
 #include <string.h>
 #include "esp_check.h"
 #include "esp_log.h"
+#include "miscellaneous.h"
 
 static const char *TAG = "Port";
 
@@ -9,7 +10,7 @@ static std::array<std::array<CRGB, PROJECT_MAXIMUM_NUMBER_OF_LEDS_PER_PORT>, PRO
 
 static CLEDController *CLEDControllerFactory(const std::string &sChipset, int32_t s32Port, CRGB *pData, int32_t s32LedCount)
 {
-    if (sChipset == "SM16703")
+    if (sChipset == "LED16703")
     {
         switch (s32Port)
         {
@@ -77,15 +78,7 @@ static bool CheckLedCount(int32_t s32LedCount)
 
 static bool CheckLedType(const std::string& sLedType)
 {
-    static const std::list<std::string> aSupportedLedTypes({"SM16703", "UCS1903"});
-    for (auto& el : aSupportedLedTypes)
-    {
-        if (el == sLedType)
-        {
-            return true;
-        }
-    }
-    return false;
+    return Existing::LedTypeOnline::IsValidLedTypeString(sLedType);
 }
 
 Port::Port(int32_t s32PortNumber) : m_s32PortNumber(s32PortNumber)

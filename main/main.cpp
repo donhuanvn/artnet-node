@@ -54,11 +54,38 @@ static void artsync_message_handler(const char * msg, size_t len, const char * s
 
 static void discovery_message_handler(const char * msg, size_t len, const char * sender)
 {
+    using namespace Existing;
     ESP_LOGI(TAG, "discovery_message_handler");
     InfoModel::GetInstance().SetHostAppIP(sender);
-    char * pResponse = cJSON_PrintUnformatted(InfoModel::GetInstance().ToJson());
-    ArtNetServer::GetInstance().Response(pResponse, strlen(pResponse));
-    delete pResponse;
+
+    if (len != sizeof(TArtConfig))
+    {
+        ESP_LOGI(TAG, "Received message with invalid length");
+        return;
+    }
+
+    switch (((TArtConfig *)msg)->CommandCode)
+    {
+    case ConfigGetConfig:
+    {
+        TArtConfig stArtConfig;
+        size_t u32Size;
+        GetConfig(stArtConfig, u32Size);
+        ArtNetServer::GetInstance().Response((const char *)&stArtConfig, u32Size);
+    }
+    break;
+    case ConfigSetConfig:
+    {
+        TArtConfig stArtConfig;
+        size_t u32Size;
+        SetConfig(*(TArtConfig *)msg, stArtConfig, u32Size);
+        ArtNetServer::GetInstance().Response((const char *)&stArtConfig, u32Size);
+    }
+    break;
+    default:
+        ESP_LOGI(TAG, "Received message with invalid command code");
+        break;
+    }
 }
 
 static void common_message_handler(const char * msg, size_t len, const char * sender)

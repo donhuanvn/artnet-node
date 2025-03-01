@@ -17,7 +17,15 @@
 #define PROJECT_MAXIMUM_NUMBER_OF_UNIVERSES 40
 #endif
 
-
+class SettingsValidator
+{
+public:
+    static bool IsValidTimeHigh(int32_t s32TimeHigh);
+    static bool IsValidTimeLow(int32_t s32TimeLow);
+    static bool IsValidIdentity(const std::string &sIdentity);
+    static bool IsValidModel(const std::string &sModel);
+    static bool IsValidLedType(const std::string &sLedType);
+};
 
 class Settings
 {
@@ -35,6 +43,8 @@ class Settings
     std::string m_sSiteSSID;
     std::string m_sSitePassword;
     std::string m_sStaticIP;
+    std::string m_sNetmask;
+    std::string m_sGatewayAddress;
     std::string m_sLedType;
     int32_t m_s32TimeHigh;
     int32_t m_s32TimeLow;
@@ -76,6 +86,12 @@ public:
 
     const std::string &GetStaticIP() const { return m_sStaticIP; }
     esp_err_t SetStaticIP(const std::string &sIP);
+
+    const std::string &GetNetmask() const { return m_sNetmask; }
+    esp_err_t SetNetmask(const std::string &sNetmask);
+
+    const std::string &GetGatewayAddress() const { return m_sGatewayAddress; }
+    esp_err_t SetGatewayAddress(const std::string &sGatewayAddress);
 
     const std::string &GetLedType() const { return m_sLedType; }
     esp_err_t SetLedType(const std::string &sType);

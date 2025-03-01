@@ -2,10 +2,45 @@
 #include "esp_log.h"
 #include "wifi.h"
 #include "string.h"
+#include "miscellaneous.h"
 
 #define BUFFER_LENGTH 1024
 
 static const char *TAG = "Settings-Model";
+
+#define DEFAULT_SETTING_BROADCAST_SSID "ESP32_AP"
+#define DEFAULT_SETTING_TIME_HIGH 1000
+#define DEFAULT_SETTING_TIME_LOW 200
+#define DEFAULT_SETTING_START_UNIVERSE 0
+#define DEFAULT_SETTING_NO_UNIVERSES 1
+#define DEFAULT_SETTING_IDENTITY "ARTNET_NODE"
+#define DEFAULT_SETTING_MODEL "ARTNET_ESP32_WIFI2.4GHZ"
+#define DEFAULT_LED_TYPE "LED1903"
+
+bool SettingsValidator::IsValidTimeHigh(int32_t s32TimeHigh)
+{
+    return (200 <= s32TimeHigh) && (s32TimeHigh <= 1000);
+}
+
+bool SettingsValidator::IsValidTimeLow(int32_t s32TimeLow)
+{
+    return (200 <= s32TimeLow) && (s32TimeLow <= 1000);
+}
+
+bool SettingsValidator::IsValidIdentity(const std::string& sIdentity)
+{
+    return sIdentity.length() > 0;
+}
+
+bool SettingsValidator::IsValidModel(const std::string& sModel)
+{
+    return sModel.length() > 0;
+}
+
+bool SettingsValidator::IsValidLedType(const std::string& sLedType)
+{
+    return Existing::LedTypeOnline::IsValidLedTypeString(sLedType);
+}
 
 Settings::Settings()
 {
@@ -17,7 +52,7 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "bcast_ssid", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sBroadcastSSID.assign(buffer, len);
+        m_sBroadcastSSID.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -30,14 +65,14 @@ Settings::Settings()
 
     if (m_sBroadcastSSID.empty())
     {
-        m_sBroadcastSSID = "ESP32_AP";
+        m_sBroadcastSSID = DEFAULT_SETTING_BROADCAST_SSID;
     }
 
     len = BUFFER_LENGTH;
     err = nvs_get_str(m_s32NVSHandle, "bcast_pass", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sBroadcastPassword.assign(buffer, len);
+        m_sBroadcastPassword.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -52,7 +87,7 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "site_ssid", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sSiteSSID.assign(buffer, len);
+        m_sSiteSSID.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -67,7 +102,7 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "site_password", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sSitePassword.assign(buffer, len);
+        m_sSitePassword.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -82,7 +117,7 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "static_ip", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sStaticIP.assign(buffer, len);
+        m_sStaticIP.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -94,14 +129,48 @@ Settings::Settings()
     }
 
     len = BUFFER_LENGTH;
-    err = nvs_get_str(m_s32NVSHandle, "led_type", buffer, &len);
+    err = nvs_get_str(m_s32NVSHandle, "netmask", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sLedType.assign(buffer, len);
+        m_sNetmask.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_sLedType = "";
+        m_sNetmask = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+    
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "gw_addr", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sGatewayAddress.assign(buffer, len - 1); // exclude null character.
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sGatewayAddress = "";
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Access NVS Error %s", esp_err_to_name(err));
+    }
+
+    len = BUFFER_LENGTH;
+    err = nvs_get_str(m_s32NVSHandle, "led_type", buffer, &len);
+    if (err == ESP_OK)
+    {
+        m_sLedType.assign(buffer, len - 1); // exclude null character.
+        if (!SettingsValidator::IsValidLedType(m_sLedType))
+        {
+            m_sLedType = DEFAULT_LED_TYPE;
+        }
+    }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        m_sLedType = DEFAULT_LED_TYPE;
     }
     else
     {
@@ -109,9 +178,9 @@ Settings::Settings()
     }
 
     err = nvs_get_i32(m_s32NVSHandle, "time_high", &m_s32TimeHigh);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_ERR_NVS_NOT_FOUND || !SettingsValidator::IsValidTimeHigh(m_s32TimeHigh))
     {
-        m_s32TimeHigh = -1;
+        m_s32TimeHigh = DEFAULT_SETTING_TIME_HIGH;
     }
     else if (err != ESP_OK)
     {
@@ -119,9 +188,9 @@ Settings::Settings()
     }
 
     err = nvs_get_i32(m_s32NVSHandle, "time_low", &m_s32TimeLow);
-    if (err == ESP_ERR_NVS_NOT_FOUND)
+    if (err == ESP_ERR_NVS_NOT_FOUND || !SettingsValidator::IsValidTimeLow(m_s32TimeLow))
     {
-        m_s32TimeLow = -1;
+        m_s32TimeLow = DEFAULT_SETTING_TIME_LOW;
     }
     else if (err != ESP_OK)
     {
@@ -132,7 +201,7 @@ Settings::Settings()
     err = nvs_get_i32(m_s32NVSHandle, "start_universe", &m_s32StartUniverse);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_s32StartUniverse = -1;
+        m_s32StartUniverse = DEFAULT_SETTING_START_UNIVERSE;
     }
     else if (err != ESP_OK)
     {
@@ -142,7 +211,7 @@ Settings::Settings()
     err = nvs_get_i32(m_s32NVSHandle, "no_universes", &m_s32NoUniverses);
     if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_s32NoUniverses = -1;
+        m_s32NoUniverses = DEFAULT_SETTING_NO_UNIVERSES;
     }
     else if (err != ESP_OK)
     {
@@ -153,11 +222,15 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "identity", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sIdentity.assign(buffer, len);
+        m_sIdentity.assign(buffer, len - 1);
+        if (!SettingsValidator::IsValidIdentity(m_sIdentity))
+        {
+            m_sIdentity = DEFAULT_SETTING_IDENTITY;
+        }
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_sIdentity = "";
+        m_sIdentity = DEFAULT_SETTING_IDENTITY;
     }
     else
     {
@@ -168,11 +241,15 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "model", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sModel.assign(buffer, len);
+        m_sModel.assign(buffer, len - 1); // exclude null character.
+        if (!SettingsValidator::IsValidModel(m_sModel))
+        {
+            m_sModel = DEFAULT_SETTING_MODEL;
+        }
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_sModel = "";
+        m_sModel = DEFAULT_SETTING_MODEL;
     }
     else
     {
@@ -183,7 +260,7 @@ Settings::Settings()
     err = nvs_get_str(m_s32NVSHandle, "product_id", buffer, &len);
     if (err == ESP_OK)
     {
-        m_sProductID.assign(buffer, len);
+        m_sProductID.assign(buffer, len - 1); // exclude null character.
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
@@ -294,6 +371,18 @@ void Settings::FromJson(const cJSON *json)
     if (cJSON_IsString(pItem))
     {
         SetStaticIP(pItem->valuestring);
+    }
+
+    pItem = cJSON_GetObjectItemCaseSensitive(json, "Netmask");
+    if (cJSON_IsString(pItem))
+    {
+        SetNetmask(pItem->valuestring);
+    }
+    
+    pItem = cJSON_GetObjectItemCaseSensitive(json, "GatewayAddress");
+    if (cJSON_IsString(pItem))
+    {
+        SetGatewayAddress(pItem->valuestring);
     }
 
     pItem = cJSON_GetObjectItemCaseSensitive(json, "LedType");
@@ -443,6 +532,8 @@ cJSON *Settings::ToJson()
     cJSON_AddStringToObject(pJson, "SiteSSID", m_sSiteSSID.c_str());
     cJSON_AddStringToObject(pJson, "SitePassword", m_sSitePassword.c_str());
     cJSON_AddStringToObject(pJson, "StaticIP", m_sStaticIP.c_str());
+    cJSON_AddStringToObject(pJson, "Netmask", m_sNetmask.c_str());
+    cJSON_AddStringToObject(pJson, "GatewayAddress", m_sGatewayAddress.c_str());
     cJSON_AddStringToObject(pJson, "LedType", m_sLedType.c_str());
     cJSON_AddNumberToObject(pJson, "TimeHigh", m_s32TimeHigh);
     cJSON_AddNumberToObject(pJson, "TimeLow", m_s32TimeLow);
@@ -528,6 +619,28 @@ esp_err_t Settings::SetStaticIP(const std::string &sIP)
     if (err == ESP_OK)
     {
         m_sStaticIP = sIP;
+    }
+    return err;
+}
+
+esp_err_t Settings::SetNetmask(const std::string &sNetmask)
+{
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "netmask", sNetmask.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sNetmask = sNetmask;
+    }
+    return err;
+}
+
+esp_err_t Settings::SetGatewayAddress(const std::string &sGatewayAddress)
+{
+    ESP_ERROR_CHECK(nvs_set_str(m_s32NVSHandle, "gw_addr", sGatewayAddress.c_str()));
+    esp_err_t err = nvs_commit(m_s32NVSHandle);
+    if (err == ESP_OK)
+    {
+        m_sGatewayAddress = sGatewayAddress;
     }
     return err;
 }

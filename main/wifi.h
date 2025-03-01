@@ -13,6 +13,8 @@ class WifiSTA
     esp_event_handler_instance_t m_ins_got_ip;
     esp_netif_t * m_netif;
     std::string m_sGotIP;
+    std::string m_sGotNetmask;
+    std::string m_sGatewayAddress;
     friend void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
 public:
     static WifiSTA& GetInstance()
@@ -27,6 +29,8 @@ public:
     bool HasValidConfig();
     std::pair<std::string, std::string> GetConfig();
     std::string GetIP() { return m_sGotIP; }
+    std::string GetNetmask() { return m_sGotNetmask; }
+    std::string GetGatewayAddress() { return m_sGatewayAddress; }
 };
 
 class WifiAP

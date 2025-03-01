@@ -53,6 +53,16 @@ std::string InfoModel::GetIP() const
     return WifiSTA::GetInstance().GetIP();
 }
 
+std::string InfoModel::GetNetmask() const 
+{
+    return WifiSTA::GetInstance().GetNetmask();
+}
+
+std::string InfoModel::GetGatewayAddress() const 
+{
+    return WifiSTA::GetInstance().GetGatewayAddress();
+}
+
 esp_err_t InfoModel::SetHostAppIP(const std::string& sHostAppIP)
 {
     esp_err_t err = nvs_set_str(m_s32NVSHandle, "host_app_ip", sHostAppIP.c_str());
