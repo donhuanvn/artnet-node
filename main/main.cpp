@@ -29,6 +29,7 @@ static void hello_task(void *pvParameters)
         ESP_LOGI(TAG, "Free Heap %d Kbytes", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) >> 10);
         Status::GetInstance().Log();
         vTaskDelay(9000 / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "Wifi AP Client Count: %ld", WifiAP::GetClientsCount());
     }
 }
 
@@ -214,8 +215,7 @@ extern "C" void app_main(void)
         ESP_LOGI(TAG, "Running in configuration mode only");
         std::string sSsid = Settings::GetInstance().GetBroadcastSSID();
         std::string sPass = Settings::GetInstance().GetBroadcastPassword();
-        WifiAP::GetInstance().Config(sSsid, sPass);
-        WifiAP::GetInstance().Init();
+        WifiAP::Start();
         CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
         xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     }

@@ -27,7 +27,6 @@ public:
     void Deinit();
     void Config(const std::string &s_ssid, const std::string &s_password);
     bool HasValidConfig();
-    std::pair<std::string, std::string> GetConfig();
     std::string GetIP() { return m_sGotIP; }
     std::string GetNetmask() { return m_sGotNetmask; }
     std::string GetGatewayAddress() { return m_sGatewayAddress; }
@@ -35,21 +34,14 @@ public:
 
 class WifiAP
 {
-    bool m_bInit;
-    esp_event_handler_instance_t m_ins_any_id;
-    esp_netif_t * netif;
+    static bool m_bStarted;
+    static esp_event_handler_instance_t m_ins_any_id;
+    static esp_netif_t * netif;
 public:
-    static WifiAP& GetInstance()
-    {
-        static WifiAP oIns;
-        return oIns;
-    }
-    void Init();
-    bool HasInit();
-    void Deinit();
-    void Config(const std::string &s_ssid, const std::string &s_password);
-    bool HasValidConfig();
-    std::pair<std::string, std::string> GetConfig();
+    static esp_err_t Start();
+    static bool IsStarted();
+    static esp_err_t Stop();
+    static int32_t GetClientsCount();
 };
 
 #endif /* __WIFI_H__ */
