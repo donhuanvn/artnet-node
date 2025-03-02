@@ -55,5 +55,8 @@ cJSON * Status::ToJson()
 void Status::Log()
 {
     cJSON * json = ToJson();
-    ESP_LOGI(TAG, "Status:\n%s", cJSON_Print(json));
+    char * pData = cJSON_Print(json);
+    ESP_LOGI(TAG, "Status:\n%s", pData);
+    cJSON_Delete(json);
+    free(pData);
 }

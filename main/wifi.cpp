@@ -4,8 +4,9 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "esp_mac.h"
-#include "lwip/inet.h"
 #include "models/settings.h"
+#include "esp_netif.h"
+#include "ping/ping_sock.h"
 
 #ifndef PROJECT_WIFI_RETRY_DELAY_MS
 #define PROJECT_WIFI_RETRY_DELAY_MS 3000
@@ -14,37 +15,16 @@
 static const char *TAG_STA = "WiFi-STA";
 static const char *TAG_AP = "WiFi-AP";
 
+bool WifiSTA::m_bStarted = false;
+esp_event_handler_instance_t WifiSTA::m_ins_any_id = nullptr;
+esp_event_handler_instance_t WifiSTA::m_ins_got_ip = nullptr;
+esp_netif_t * WifiSTA::m_netif = nullptr;
+esp_netif_ip_info_t WifiSTA::m_stGotIP = {};
+int32_t WifiSTA::m_s32RetryCount = 0;
+
 bool WifiAP::m_bStarted = false;
 esp_event_handler_instance_t WifiAP::m_ins_any_id = nullptr;
 esp_netif_t * WifiAP::netif = nullptr;
-
-class ChangeWifiMode
-{
-    wifi_mode_t mode;
-public:
-    ChangeWifiMode(wifi_mode_t destMode)
-    {
-        ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
-        ESP_ERROR_CHECK(esp_wifi_set_mode(destMode));
-    }
-    ~ChangeWifiMode()
-    {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(mode));
-    }
-};
-
-static bool is_valid_ssid(const std::string& s_ssid)
-{
-    return s_ssid.length() > 1;
-}
-
-static bool is_valid_password(const std::string& s_password, wifi_auth_mode_t& o_auth_mode)
-{
-    bool valid = false;
-    valid |= (o_auth_mode == WIFI_AUTH_OPEN && s_password.empty());
-    valid |= (o_auth_mode == WIFI_AUTH_WPA_WPA2_PSK && s_password.length() >= 8);
-    return valid;
-}
 
 static void reconnect(TimerHandle_t xTimer)
 {
@@ -57,24 +37,27 @@ void wifi_sta_event_handler(void *arg, esp_event_base_t event_base, int32_t even
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
+        WifiSTA::m_s32RetryCount = 0;
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        wifi_config_t wifi_config;
-        ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &wifi_config));
+        if (++WifiSTA::m_s32RetryCount >= PROJECT_WIFI_STA_MAX_RETRY_COUNT)
+        {
+            ESP_LOGE(TAG_STA, "connect to the AP '%s' fail, retry count exceed", Settings::GetInstance().GetSiteSSID().c_str());
+            ESP_LOGE(TAG_STA, "Wifi Station is automatically stopped!");
+            WifiSTA::Stop();
+            return;
+        }
         xTimerStart(wifi_reconnect_timer, portMAX_DELAY);
-        ESP_LOGI(TAG_STA, "connect to the AP '%s' fail, reconnect after %d seconds ...", wifi_config.sta.ssid, PROJECT_WIFI_STA_RETRY_DELAY_MS / 1000);
+        ESP_LOGI(TAG_STA, "connect to the AP '%s' fail, reconnect after %d second(s) ...", Settings::GetInstance().GetSiteSSID().c_str(), PROJECT_WIFI_STA_RETRY_DELAY_MS / 1000);
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        WifiSTA::GetInstance().m_sGotIP = inet_ntoa(event->ip_info.ip);
-        WifiSTA::GetInstance().m_sGotNetmask = inet_ntoa(event->ip_info.netmask);
-        WifiSTA::GetInstance().m_sGatewayAddress = inet_ntoa(event->ip_info.gw);
-        wifi_config_t wifi_config;
-        ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &wifi_config));
-        ESP_LOGI(TAG_STA, "connect to the AP '%s' success", wifi_config.sta.ssid);
+        WifiSTA::m_stGotIP = event->ip_info;
+        ESP_LOGI(TAG_STA, "connect to the AP '%s' success", Settings::GetInstance().GetSiteSSID().c_str());
+        WifiSTA::PingGateway();
     }
 }
 
@@ -93,90 +76,219 @@ static void wifi_ap_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-void WifiSTA::Init()
+bool WifiSTA::IsStarted()
 {
+    wifi_mode_t mode;
+    switch (esp_wifi_get_mode(&mode))
+    {
+    case ESP_ERR_WIFI_NOT_INIT:
+        return false;
+    case ESP_ERR_INVALID_ARG:
+        ESP_LOGE(TAG_STA, "Invalid argument to get wifi mode");
+        return false;
+    }
+    return m_bStarted && m_netif != nullptr && mode == WIFI_MODE_STA;
+}
+
+esp_err_t WifiSTA::Start(bool bUseStaticIp)
+{
+    if (IsStarted())
+    {
+        ESP_LOGE(TAG_STA, "STA already started");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (WifiAP::IsStarted())
+    {
+        ESP_LOGE(TAG_STA, "AP is started, cannot start STA");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     m_netif = esp_netif_create_default_wifi_sta();
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    wifi_init_config_t stInitCfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&stInitCfg));
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_sta_event_handler, NULL, &m_ins_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_sta_event_handler, NULL, &m_ins_got_ip));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    const std::string& sSsid = Settings::GetInstance().GetSiteSSID();
+    const std::string& sPass = Settings::GetInstance().GetSitePassword();
+    if (!SettingsValidator::IsValidSiteSSID(sSsid))
+    {
+        ESP_LOGE(TAG_STA, "Invalid Site SSID is '%s' is invalid", sSsid.c_str());
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    wifi_config_t stCfg;
+    memset(&stCfg, 0, sizeof(stCfg));
+    strcpy((char *)(stCfg.sta.ssid), sSsid.c_str());
+    strcpy((char *)(stCfg.sta.password), sPass.c_str());
+    stCfg.sta.threshold.authmode = (sPass.length() == 0) ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &stCfg);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Failed to set wifi config (%s)", esp_err_to_name(err));
+        return err;
+    }
+
+    if (bUseStaticIp)
+    {
+        const char *pIP = Settings::GetInstance().GetStaticIP().c_str();
+        const char *pNetmask = Settings::GetInstance().GetNetmask().c_str();
+        const char *pGW = Settings::GetInstance().GetGatewayAddress().c_str();
+
+        ESP_LOGI(TAG_STA, "Using Static IP '%s', Netmask '%s', Gateway '%s'", pIP, pNetmask, pGW);
+
+        esp_netif_ip_info_t ip_info;
+        ip_info.ip.addr = inet_addr(pIP);
+        ip_info.netmask.addr = inet_addr(pNetmask);
+        ip_info.gw.addr = inet_addr(pGW);
+        ESP_ERROR_CHECK(esp_netif_dhcpc_stop(m_netif));
+        ESP_ERROR_CHECK(esp_netif_set_ip_info(m_netif, &ip_info));
+    }
+
     ESP_ERROR_CHECK(esp_wifi_start());
+    m_bStarted = true;
 
-    ESP_LOGI(TAG_STA, "wifi_sta_init finished.");
+    ESP_LOGI(TAG_STA, "Wifi Station is started. SSID: '%s' password: '%s'", stCfg.sta.ssid, stCfg.sta.password);
 
-    m_bInit = true;
+    return ESP_OK;
 }
 
-bool WifiSTA::HasInit()
+esp_err_t WifiSTA::Stop()
 {
-    return m_bInit;
-}
+    if (!IsStarted())
+    {
+        ESP_LOGE(TAG_STA, "STA not started");
+        return ESP_ERR_INVALID_STATE;
+    }
 
-void WifiSTA::Deinit()
-{
-    ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, m_ins_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, m_ins_got_ip));
+    if (esp_wifi_stop() != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Failed to stop STA");
+    }
+    if (esp_wifi_deinit() != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Failed to deinit STA");
+    }
+    if (esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, m_ins_any_id) != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Failed to unregister event handler");
+    }
+    if (esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, m_ins_got_ip) != ESP_OK)
+    {
+        ESP_LOGE(TAG_STA, "Failed to unregister event handler");
+    }
+
     esp_netif_destroy_default_wifi(m_netif);
-    m_bInit = false;
+    m_netif = nullptr;
+
+    m_bStarted = false;
+
+    return ESP_OK;
 }
 
-void WifiSTA::Config(const std::string &s_ssid, const std::string &s_password)
+esp_err_t WifiSTA::ApplyStaticIP()
 {
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    if (!IsStarted())
+    {
+        ESP_LOGE(TAG_STA, "STA not started");
+        return ESP_ERR_INVALID_STATE;
+    }
 
-    wifi_config_t wifi_config;
-    memset(&wifi_config, 0, sizeof(wifi_config));
-    strcpy((char *)(wifi_config.sta.ssid), s_ssid.c_str());
-    strcpy((char *)(wifi_config.sta.password), s_password.c_str());
-    if (s_password.length() == 0)
-    {
-        wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
-    }
-    else
-    {
-        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK;
-    }
-    ChangeWifiMode _(WIFI_MODE_STA);
-    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
-    }
-    ESP_ERROR_CHECK(err);
+    const char *pIP = Settings::GetInstance().GetStaticIP().c_str();
+    const char *pNetmask = Settings::GetInstance().GetNetmask().c_str();
+    const char *pGW = Settings::GetInstance().GetGatewayAddress().c_str();
+
+    esp_netif_ip_info_t ip_info;
+    // Convert IP strings to ip4_addr_t using inet_addr
+    ip_info.ip.addr = inet_addr(pIP);
+    ip_info.netmask.addr = inet_addr(pNetmask);
+    ip_info.gw.addr = inet_addr(pGW);
+
+    // Set the static IP configuration
+    ESP_LOGI(TAG_STA, "Stopping DHCP client");
+    ESP_ERROR_CHECK(esp_netif_dhcpc_stop(m_netif)); // Stop DHCP client
+    ESP_LOGI(TAG_STA, "Setting static IP '%s'", pIP);
+    ESP_LOGI(TAG_STA, "Setting netmask '%s'", pNetmask);
+    ESP_LOGI(TAG_STA, "Setting gateway '%s'", pGW);
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(m_netif, &ip_info));
+
+    m_stGotIP = ip_info;
+
+    return ESP_OK;
 }
 
-bool WifiSTA::HasValidConfig()
+esp_err_t WifiSTA::PingGateway()
 {
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    wifi_config_t wifi_config;
-    ChangeWifiMode _(WIFI_MODE_STA);
-    esp_err_t err = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
-    if (err != ESP_OK)
+    if (!IsStarted())
     {
-        ESP_LOGE(TAG_STA, "Error (%s)", esp_err_to_name(err));
+        ESP_LOGE(TAG_STA, "STA not started");
+        return ESP_ERR_INVALID_STATE;
     }
-    ESP_ERROR_CHECK(err);
 
-    bool valid = true;
-    valid &= is_valid_ssid((const char *)(wifi_config.sta.ssid));
-    valid &= is_valid_password((const char *)(wifi_config.sta.password), wifi_config.sta.threshold.authmode);
+    if (m_stGotIP.gw.addr == 0)
+    {
+        ESP_LOGE(TAG_STA, "STA GW is unknown");
+        return ESP_ERR_INVALID_STATE;
+    }
 
-    return valid;
+    esp_ping_config_t stPingConfig = ESP_PING_DEFAULT_CONFIG();
+    stPingConfig.target_addr.type = ESP_IPADDR_TYPE_V4;
+    stPingConfig.target_addr.u_addr.ip4.addr = m_stGotIP.gw.addr; // Gateway address
+    stPingConfig.count = 3; // Number of ping requests to send
+    
+    esp_ping_callbacks_t stCbs = {
+        .cb_args = NULL,
+        .on_ping_success = [](esp_ping_handle_t hdl, void *args) {
+            uint32_t u32ElapsedTime;
+            esp_ping_get_profile(hdl, ESP_PING_PROF_TIMEGAP, &u32ElapsedTime, sizeof(u32ElapsedTime));
+            ESP_LOGI(TAG_STA, "Ping success, time: %ld ms", u32ElapsedTime);
+        },
+        .on_ping_timeout = [](esp_ping_handle_t hdl, void *args) {
+            ESP_LOGW(TAG_STA, "Ping timeout");
+        },
+        .on_ping_end = [](esp_ping_handle_t hdl, void *args) {
+            ESP_LOGI(TAG_STA, "Ping end");
+            esp_ping_delete_session(hdl);
+        }
+    };
+
+    esp_ping_handle_t hPing;
+    esp_err_t err = esp_ping_new_session(&stPingConfig, &stCbs, &hPing);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG_STA, "Failed to create ping session: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_ping_start(hPing);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG_STA, "Failed to start ping: %s", esp_err_to_name(err));
+        esp_ping_delete_session(hPing);
+        return err;
+    }
+
+    return ESP_OK;
 }
+
+// ====================================================================================================
+// WifiAP
+// ====================================================================================================
 
 esp_err_t WifiAP::Start()
 {
     if (IsStarted())
     {
         ESP_LOGE(TAG_AP, "AP already started");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (WifiSTA::IsStarted())
+    {
+        ESP_LOGE(TAG_AP, "STA is started, cannot start AP");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -248,13 +360,11 @@ esp_err_t WifiAP::Stop()
     {
         ESP_LOGE(TAG_AP, "Failed to unregister event handler");
     }
-    if (esp_wifi_deinit() != ESP_OK)
-    {
-        ESP_LOGE(TAG_AP, "Failed to deinit wifi");
-    }
 
     esp_netif_destroy_default_wifi(netif);
     netif = nullptr;
+    
+    m_bStarted = false;
 
     return ESP_OK;
 }

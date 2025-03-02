@@ -42,6 +42,11 @@ bool SettingsValidator::IsValidLedType(const std::string& sLedType)
     return Existing::LedTypeOnline::IsValidLedTypeString(sLedType);
 }
 
+bool SettingsValidator::IsValidSiteSSID(const std::string& sSsid)
+{
+    return sSsid.length() > 0;
+}
+
 Settings::Settings()
 {
     esp_err_t err;

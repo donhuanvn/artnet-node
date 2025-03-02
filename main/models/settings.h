@@ -25,6 +25,7 @@ public:
     static bool IsValidIdentity(const std::string &sIdentity);
     static bool IsValidModel(const std::string &sModel);
     static bool IsValidLedType(const std::string &sLedType);
+    static bool IsValidSiteSSID(const std::string &sSsid);
 };
 
 class Settings

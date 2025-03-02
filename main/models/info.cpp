@@ -22,8 +22,10 @@ cJSON * InfoModel::ToJson()
 void InfoModel::Log()
 {
     cJSON * json = ToJson();
-    ESP_LOGI(TAG, "Info: \n%s", cJSON_Print(json));
+    char * pData = cJSON_Print(json);
+    ESP_LOGI(TAG, "Info: \n%s", pData);
     cJSON_Delete(json);
+    free(pData);
 }
 
 std::string InfoModel::GetMAC(const std::string& sMacType) const 
@@ -50,17 +52,17 @@ std::string InfoModel::GetMAC(const std::string& sMacType) const
 
 std::string InfoModel::GetIP() const 
 {
-    return WifiSTA::GetInstance().GetIP();
+    return WifiSTA::GetIP();
 }
 
 std::string InfoModel::GetNetmask() const 
 {
-    return WifiSTA::GetInstance().GetNetmask();
+    return WifiSTA::GetNetmask();
 }
 
 std::string InfoModel::GetGatewayAddress() const 
 {
-    return WifiSTA::GetInstance().GetGatewayAddress();
+    return WifiSTA::GetGatewayAddress();
 }
 
 esp_err_t InfoModel::SetHostAppIP(const std::string& sHostAppIP)
