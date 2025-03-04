@@ -16,8 +16,8 @@ class HWStatus
 public:
     enum Mode
     {
-        CONFIG_ONLY,
-        CONFIG_AND_RUN_DMX,
+        WIFI_AP_ONLY,
+        WIFI_AUTO_CONNECT,
     };
     static Mode GetMode();
     static float GetBrightValue();

@@ -17,9 +17,9 @@ HWStatus::Mode HWStatus::GetMode()
     switch (s32Level)
     {
     case 0:
-        return CONFIG_ONLY;
+        return WIFI_AP_ONLY;
     default:
-        return CONFIG_AND_RUN_DMX;
+        return WIFI_AUTO_CONNECT;
     }
 }
 

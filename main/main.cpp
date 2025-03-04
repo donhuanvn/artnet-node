@@ -30,7 +30,6 @@ static void hello_task(void *pvParameters)
         ESP_LOGI(TAG, "Free Heap %d Kbytes", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) >> 10);
         Status::GetInstance().Log();
         vTaskDelay(9000 / portTICK_PERIOD_MS);
-        ESP_LOGI(TAG, "Wifi AP Client Count: %ld", WifiAP::GetClientsCount());
     }
 }
 
@@ -211,7 +210,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     HWStatus::Mode mode = HWStatus::GetMode();
-    if (mode == HWStatus::Mode::CONFIG_ONLY)
+    if (mode == HWStatus::Mode::WIFI_AP_ONLY)
     {
         ESP_LOGI(TAG, "Running in configuration mode only");
         std::string sSsid = Settings::GetInstance().GetBroadcastSSID();
@@ -220,12 +219,13 @@ extern "C" void app_main(void)
         CommonServer::GetInstance().RegisterMessageHandler(common_message_handler);
         xTaskCreate(CommonServer::FreeRTOSTask, "CommonServer::FreeRTOSTask", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
     }
-    else if (mode == HWStatus::Mode::CONFIG_AND_RUN_DMX)
+    else if (mode == HWStatus::Mode::WIFI_AUTO_CONNECT)
     {
         ESP_LOGI(TAG, "Running in configuration and running DMX");
         std::string sSsid = Settings::GetInstance().GetSiteSSID();
         std::string sPass = Settings::GetInstance().GetSitePassword();
-        WifiSTA::Start();
+
+        WifiAutoConnect::Start();
 
         ArtNetServer::GetInstance().RegisterDMXMessageHandler(dmx_message_handler);
         ArtNetServer::GetInstance().RegisterArtSyncMessageHandler(artsync_message_handler);
