@@ -10,7 +10,7 @@ static std::array<std::array<CRGB, PROJECT_MAXIMUM_NUMBER_OF_LEDS_PER_PORT>, PRO
 
 static CLEDController *CLEDControllerFactory(const std::string &sChipset, int32_t s32Port, CRGB *pData, int32_t s32LedCount)
 {
-    if (sChipset == "LED16703")
+    if (sChipset == "LED1903" || sChipset == "LED16703")
     {
         switch (s32Port)
         {

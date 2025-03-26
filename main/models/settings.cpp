@@ -8,7 +8,8 @@
 
 static const char *TAG = "Settings-Model";
 
-#define DEFAULT_SETTING_BROADCAST_SSID "ESP32_AP"
+#define DEFAULT_SETTING_BROADCAST_SSID "Solantech_0001"
+#define DEFAULT_SETTING_SITE_SSID "BlankSSID"
 #define DEFAULT_SETTING_TIME_HIGH 1000
 #define DEFAULT_SETTING_TIME_LOW 200
 #define DEFAULT_SETTING_START_UNIVERSE 0
@@ -16,6 +17,7 @@ static const char *TAG = "Settings-Model";
 #define DEFAULT_SETTING_IDENTITY "ARTNET_NODE"
 #define DEFAULT_SETTING_MODEL "ARTNET_ESP32_WIFI2.4GHZ"
 #define DEFAULT_LED_TYPE "LED1903"
+#define DEFAULT_LED_COUNT 1020
 
 bool SettingsValidator::IsValidTimeHigh(int32_t s32TimeHigh)
 {
@@ -96,7 +98,7 @@ Settings::Settings()
     }
     else if (err == ESP_ERR_NVS_NOT_FOUND)
     {
-        m_sSiteSSID = "";
+        m_sSiteSSID = DEFAULT_SETTING_SITE_SSID;
     }
     else
     {
@@ -316,12 +318,20 @@ Settings::Settings()
                     {
                         m_aPorts[i].m_s32StartUniverse = cJSON_GetNumberValue(pItem);
                     }
+                    else
+                    {
+                        m_aPorts[i].m_s32StartUniverse = DEFAULT_SETTING_START_UNIVERSE;
+                    }
                 }
                 {
                     cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "NoUniverses");
                     if (pItem != NULL && cJSON_IsNumber(pItem))
                     {
                         m_aPorts[i].m_s32NoUniverses = cJSON_GetNumberValue(pItem);
+                    }
+                    else
+                    {
+                        m_aPorts[i].m_s32NoUniverses = DEFAULT_SETTING_NO_UNIVERSES;
                     }
                 }
                 {
@@ -330,12 +340,20 @@ Settings::Settings()
                     {
                         m_aPorts[i].m_s32LedCount = cJSON_GetNumberValue(pItem);
                     }
+                    else
+                    {
+                        m_aPorts[i].m_s32LedCount = DEFAULT_LED_COUNT;
+                    }
                 }
                 {
                     cJSON * pItem = cJSON_GetObjectItemCaseSensitive(pPort, "LedType");
                     if (pItem != NULL && cJSON_IsString(pItem))
                     {
                         m_aPorts[i].m_sLedType = cJSON_GetStringValue(pItem);
+                    }
+                    else
+                    {
+                        m_aPorts[i].m_sLedType = DEFAULT_LED_TYPE;
                     }
                 }
             }
@@ -769,4 +787,12 @@ esp_err_t Settings::SavePorts()
     cJSON_Delete(json);
     free(pData);
     return err;
+}
+
+Settings::PortSettings::PortSettings()
+{
+    m_s32StartUniverse = DEFAULT_SETTING_START_UNIVERSE;
+    m_s32NoUniverses = DEFAULT_SETTING_NO_UNIVERSES;
+    m_s32LedCount = DEFAULT_LED_COUNT;
+    m_sLedType = DEFAULT_LED_TYPE;
 }

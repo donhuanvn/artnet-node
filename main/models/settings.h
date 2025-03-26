@@ -36,7 +36,7 @@ class Settings
         int32_t m_s32NoUniverses;
         int32_t m_s32LedCount;
         std::string m_sLedType;
-        PortSettings() : m_s32StartUniverse(-1), m_s32NoUniverses(-1), m_s32LedCount(-1) {}
+        PortSettings();
     } PortSettings;
 
     std::string m_sBroadcastSSID;
